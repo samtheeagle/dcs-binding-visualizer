@@ -234,6 +234,66 @@ The tool should auto-discover seats without requiring manual configuration. Sing
 
 This is the core mechanism that eliminates manual coordinate entry. The tool must reliably detect numbered circles in device images and extract both their position and the number they contain.
 
+**Key design: colour-filled markers on greyscale images.**
+
+Since device template images are primarily black/white/greyscale, markers use a **solid highlight colour fill** (with black number text inside). This makes detection trivial — simply threshold for the marker colour in HSV colour space, and nothing else in the greyscale image will match.
+
+#### 3.0 Marker Specification
+
+**Marker format:** Circle filled with a configurable highlight colour, containing a black number.
+
+```
+    ┌───────────┐
+    │  ●●●●●●●  │  ← solid colour fill (e.g., bright green)
+    │  ●● 7 ●●  │  ← black digit(s) centered inside
+    │  ●●●●●●●  │
+    └───────────┘
+```
+
+**Why colour fill (not coloured digits):**
+- Large colour area = reliable detection via HSV thresholding
+- Black text on colour background = strong contrast for OCR
+- Works even with small circles (fill area always larger than digit strokes)
+- Simple for users to create (paint bucket tool on the circle)
+- Near-zero false positives on greyscale device images
+
+**Predefined colour presets:**
+
+| Preset Name | Hex | HSV Hue Range | Best For |
+|-------------|-----|---------------|----------|
+| `green` | `#00FF00` | H: 35-85 | Default — never appears on hardware photos |
+| `magenta` | `#FF00FF` | H: 140-170 | Alternative if image has green elements |
+| `cyan` | `#00FFFF` | H: 85-100 | Another alternative |
+
+**Custom colour:** User can also specify any hex colour value (e.g., `#FF8800` for orange). The tool will compute the appropriate HSV hue range for thresholding automatically based on the provided hex value.
+
+**Configuration in config.yaml:**
+
+```yaml
+detection:
+  marker_colour: green          # preset name OR hex value (e.g., "#FF00FF")
+  # Available presets: green, magenta, cyan
+  # Or specify any custom hex: "#RRGGBB"
+```
+
+**Wizard prompt (during `dcs-bindings init`):**
+
+```
+─── Marker Colour ─────────────────────────────────────────
+
+What colour did you use to fill the numbered circles on your device images?
+
+  1. Green  (#00FF00) — recommended default
+  2. Magenta (#FF00FF)
+  3. Cyan   (#00FFFF)
+  4. Custom hex colour
+
+Select (1-4):
+> 1
+
+✓ Marker colour set to: green
+```
+
 #### 3.1 Detection Pipeline (Detailed)
 
 ```
@@ -241,53 +301,49 @@ Input Image
     │
     ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 1: Preprocessing                                │
-│  - Convert to grayscale                              │
-│  - Apply Gaussian blur (reduce noise)                │
-│  - Adaptive thresholding (handle varied backgrounds) │
+│ Step 1: Colour Isolation                             │
+│  - Convert image to HSV colour space                 │
+│  - Threshold for the configured marker colour:       │
+│    • Compute target hue ± tolerance from config      │
+│    • Apply saturation minimum (reject desaturated)   │
+│    • Apply value/brightness minimum                  │
+│  - Result: binary mask where ONLY markers are white  │
+│  - This single step eliminates nearly all false      │
+│    positives — nothing else on a greyscale image     │
+│    will have saturated colour                        │
 └─────────────────────┬───────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 2: Circle/Marker Detection                      │
-│  - Find contours in thresholded image                │
+│ Step 2: Contour Detection & Filtering                │
+│  - Find contours on the colour mask                  │
 │  - Filter by:                                        │
+│    • Minimum area (reject tiny noise/artifacts)      │
 │    • Circularity (ratio of area to perimeter²)       │
 │    • Aspect ratio (width/height ≈ 1.0)              │
-│    • Area (min/max size thresholds)                  │
-│    • Solidity (convex hull fill ratio)               │
-│  - Alternatively: HoughCircles with tuned params     │
-│  - Output: list of candidate circle bounding boxes   │
+│  - Compute center point of each valid contour        │
+│  - Output: list of marker bounding boxes + centers   │
 └─────────────────────┬───────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 3: Circle Validation                            │
-│  - Verify white fill (mean pixel intensity > thresh) │
-│  - Check for dark content inside (indicates number)  │
-│  - Reject false positives (solid circles, artifacts) │
-│  - Output: validated circle regions with centers     │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│ Step 4: Number Extraction (OCR)                      │
-│  - Crop each validated circle with padding           │
+│ Step 3: Number Extraction (OCR)                      │
+│  - Crop each detected marker region with padding     │
 │  - Preprocess ROI for OCR:                           │
+│    • Convert ROI to greyscale                        │
+│    • Threshold to isolate black text from colour fill │
 │    • Resize to consistent height (e.g., 48px)        │
-│    • Binarize (pure black text on white)             │
-│    • Invert if needed                                │
+│    • Invert if needed for Tesseract                  │
 │  - Run Tesseract with digit-only config:             │
 │    --psm 7 (single line) -c tessedit_char_whitelist= │
 │    0123456789                                        │
-│  - Validate: reject non-numeric / multi-digit where  │
-│    unexpected                                        │
+│  - Validate: reject non-numeric / low confidence     │
 │  - Output: {number: (center_x, center_y)} mapping    │
 └─────────────────────┬───────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 5: Persistent Cache (CRITICAL)                  │
+│ Step 4: Persistent Cache (CRITICAL)                  │
 │  - Save results to a YAML/JSON file per image:       │
 │    e.g., .cache/winwing-stick_positions.yaml         │
 │  - Cache file contains:                              │
@@ -295,6 +351,7 @@ Input Image
 │    • Detected positions: {number: (x, y)}            │
 │    • Detection timestamp                             │
 │    • Detection parameters used                       │
+│    • Marker colour used                              │
 │  - On subsequent runs:                               │
 │    1. Compute hash of current image                  │
 │    2. If hash matches cache → load positions (FAST)  │
@@ -314,10 +371,10 @@ Input Image
 | Multi-digit numbers (10+) | OCR config allows multi-digit; validate against mapping file expected range |
 | Circles partially obscured by device edges | Detect partial contours; use minimum enclosing circle estimation |
 | Varying circle sizes in one image | Use relative size filtering (within 2× of median detected size) |
-| Similar-looking device features (knobs, screws) | White-fill + dark-content validation eliminates most false positives |
-| Low contrast images | Adaptive thresholding (ADAPTIVE_THRESH_GAUSSIAN_C) handles local contrast |
+| Image has some colour elements (LEDs, logos) | HSV hue range is narrow enough to avoid most; user can pick a different marker colour |
 | Numbers touching circle edge | Add padding when cropping ROI for OCR |
 | Blurry or low-res images | Warn user; provide minimum recommended resolution in docs |
+| User chose a colour that appears in their image | `detect-buttons --debug` will reveal false positives; user should switch colour in config |
 
 #### 3.3 Detection Tuning & Debug Tools
 
@@ -341,25 +398,28 @@ The debug image will show:
 **Tuning parameters** (configurable in config.yaml or CLI flags):
 ```yaml
 detection:
-  min_circle_radius: 10        # px - minimum marker radius
-  max_circle_radius: 60        # px - maximum marker radius
-  circularity_threshold: 0.7   # 1.0 = perfect circle
-  min_white_fill: 200          # mean grayscale value inside circle (0-255)
-  ocr_confidence_threshold: 60 # Tesseract confidence minimum (0-100)
-  gaussian_blur_kernel: 5      # preprocessing blur kernel size
+  marker_colour: green          # preset: green, magenta, cyan — or hex: "#RRGGBB"
+  hue_tolerance: 15             # ± degrees around target hue in HSV space
+  saturation_min: 100           # minimum saturation (0-255) to count as coloured
+  value_min: 100                # minimum brightness (0-255)
+  min_marker_area: 300          # px² - minimum contour area to consider
+  circularity_threshold: 0.6    # 1.0 = perfect circle (lower = more lenient)
+  ocr_confidence_threshold: 60  # Tesseract confidence minimum (0-100)
 ```
 
 #### 3.4 Image Requirements for Users
 
 To ensure reliable detection, user-provided device images should follow these guidelines:
 
-- **Marker style**: White filled circle with black number centered inside
+- **Image base**: Greyscale/black-and-white photograph or diagram of the device
+- **Marker style**: Circle filled with the configured highlight colour (default: bright green `#00FF00`) containing black number text
 - **Marker size**: Minimum ~20px radius at final image resolution; consistent size preferred
-- **Contrast**: Circles should contrast clearly against the device background
+- **Colour saturation**: Use a pure, saturated fill colour — avoid muted/pastel shades
 - **Spacing**: Markers should not overlap or touch each other
 - **Numbers**: Clear, simple digits (sans-serif style works best for OCR)
 - **Resolution**: Minimum 150 DPI equivalent; higher is better for OCR accuracy
 - **Format**: PNG preferred (lossless); JPEG acceptable if high quality
+- **Avoid**: Other saturated-colour elements in the image that match your marker colour
 
 ### 4. Button Number Mapping (ID only — no coordinates)
 
@@ -748,7 +808,8 @@ dcs-binding-visualizer/
 | Decision | Rationale |
 |----------|-----------|
 | Python + Pillow | Cross-platform, rich ecosystem, easy image manipulation |
-| OCR for button detection | All (x, y) positions determined automatically from the image — user never manually specifies coordinates; just numbers their image with circles |
+| OCR for button detection | All (x, y) positions determined automatically from the image — user never manually specifies coordinates; just adds colour-filled numbered circles to their image |
+| Colour-filled markers on greyscale images | Using a configurable highlight colour (default: green) makes detection trivially reliable via HSV thresholding — near-zero false positives since greyscale images have no saturated colour |
 | YAML config | Human-readable, easy to edit, widely supported |
 | Per-device mapping file | Handles Linux/Windows button ID differences cleanly |
 | A4 landscape with two devices | Fits stick + throttle/collective on one printable sheet |
