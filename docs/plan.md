@@ -2,7 +2,7 @@
 
 ## Overview
 
-A Python CLI utility that reads joystick/HOTAS button mappings from DCS World configuration files and renders visual reference images showing the control bindings overlaid on user-provided device photographs/diagrams. Outputs printable A4 landscape PNGs — one per aircraft module — with both devices (stick + throttle/collective) displayed side by side.
+A Python CLI utility that reads joystick/HOTAS button mappings from DCS World configuration files and renders visual reference images showing the control bindings overlaid on user-provided device photographs/diagrams. Outputs printable A4 landscape PNGs — one per aircraft seat/role — with both devices (stick + throttle/collective) displayed side by side. Multi-seat aircraft (e.g., AH-64D Pilot/CPG, F-14 Pilot/RIO) are automatically detected and produce separate binding images per seat.
 
 ## Target Environment
 
@@ -46,6 +46,7 @@ A Python CLI utility that reads joystick/HOTAS button mappings from DCS World co
                                                    ▼
                                       ┌────────────────────────────┐
                                       │  Output PNG per aircraft   │
+                                      │  per seat/role             │
                                       └────────────────────────────┘
 ```
 
@@ -87,6 +88,26 @@ output:
 - Files are Lua tables (not full Lua scripts) — use a lightweight Lua table parser
 - Extract: button/hat/axis assignments, binding display names, modifier keys
 - Handle both `default.lua` (defaults) and user-overridden profiles
+
+**Multi-seat aircraft detection:**
+
+Some aircraft have multiple crew positions with independent binding sets. DCS organizes these as separate subdirectories or profile sets within the aircraft's input config folder. Examples:
+
+| Aircraft | Seats |
+|----------|-------|
+| AH-64D Apache | Pilot, CPG (Co-Pilot/Gunner) |
+| F-14 Tomcat | Pilot, RIO (Radar Intercept Officer) |
+| Mi-24P Hind | Pilot, Operator |
+| SA342 Gazelle | Pilot, Gunner |
+| UH-1H Huey | Pilot, Gunner |
+
+The parser must:
+1. **Detect seat/role directories** within each aircraft's config path (e.g., subdirectories or naming conventions that indicate separate crew positions)
+2. **Enumerate all seats** for a given aircraft automatically
+3. **Parse bindings per seat** — each seat produces its own independent binding set
+4. **Generate separate output images per seat** — named clearly (e.g., `AH-64D_Pilot.png`, `AH-64D_CPG.png`)
+
+The tool should auto-discover seats without requiring manual configuration. Single-seat aircraft simply produce one image as normal.
 
 **Candidate libraries:**
 - `lupa` (Lua interpreter in Python)
@@ -147,7 +168,7 @@ Uses **Pillow** (PIL) to compose the final output:
 - White or dark background (configurable)
 - Left half: device 1 image (scaled to fit)
 - Right half: device 2 image (scaled to fit)
-- Title bar at top: aircraft name
+- Title bar at top: aircraft name + seat/role (e.g., "AH-64D Apache — Pilot")
 
 **Label rendering:**
 - For each bound button:
@@ -172,13 +193,16 @@ Uses **Pillow** (PIL) to compose the final output:
 ## CLI Interface
 
 ```bash
-# Generate all aircraft binding images
+# Generate all aircraft binding images (all seats)
 dcs-bindings render --config config.yaml
 
-# Generate for a specific aircraft
-dcs-bindings render --config config.yaml --aircraft "FA-18C_hornet"
+# Generate for a specific aircraft (all seats)
+dcs-bindings render --config config.yaml --aircraft "AH-64D_BLK_II"
 
-# List detected aircraft profiles
+# Generate for a specific aircraft and seat only
+dcs-bindings render --config config.yaml --aircraft "AH-64D_BLK_II" --seat "Pilot"
+
+# List detected aircraft profiles (shows seats where applicable)
 dcs-bindings list-aircraft --config config.yaml
 
 # Detect and preview button positions from a device image (for setup/debugging)
@@ -187,6 +211,19 @@ dcs-bindings detect-buttons --image images/winwing-orion2-stick.png
 # Validate configuration and mappings
 dcs-bindings validate --config config.yaml
 ```
+
+**Example `list-aircraft` output:**
+```
+Detected aircraft profiles:
+  FA-18C_hornet          (1 seat)
+  AH-64D_BLK_II         (2 seats: Pilot, CPG)
+  F-14B                  (2 seats: Pilot, RIO)
+  Ka-50_3                (1 seat)
+```
+
+**Output file naming:**
+- Single-seat: `output/FA-18C_hornet.png`
+- Multi-seat: `output/AH-64D_BLK_II_Pilot.png`, `output/AH-64D_BLK_II_CPG.png`
 
 ---
 
@@ -253,6 +290,7 @@ dcs-binding-visualizer/
 - [ ] Project scaffolding (pyproject.toml, package structure)
 - [ ] Configuration system (YAML loading, path validation)
 - [ ] DCS Lua config parser (read binding files, extract assignments)
+- [ ] Multi-seat detection (auto-discover crew positions per aircraft)
 
 ### Phase 2: Image Detection
 - [ ] Circle detection (OpenCV contours on device images)
@@ -265,7 +303,8 @@ dcs-binding-visualizer/
 - [ ] Device image scaling and placement (two-up layout)
 - [ ] Label rendering with background boxes
 - [ ] Text placement with basic collision avoidance
-- [ ] Title and aircraft name header
+- [ ] Title and aircraft name + seat/role header
+- [ ] Per-seat output file naming
 
 ### Phase 4: Integration & Polish
 - [ ] Full pipeline: config → parse → detect → render → output
@@ -294,6 +333,7 @@ dcs-binding-visualizer/
 | Per-device mapping file | Handles Linux/Windows button ID differences cleanly |
 | A4 landscape with two devices | Fits stick + throttle/collective on one printable sheet |
 | Labels near buttons (not legend table) | More intuitive — see the binding right where the button is |
+| Auto-detect multi-seat aircraft | No manual configuration needed — tool discovers seats from DCS directory structure and generates separate images per seat |
 
 ---
 
@@ -303,3 +343,4 @@ dcs-binding-visualizer/
 - **Hat switches**: Hats have multiple directions (up/down/left/right/press). Each direction may need its own label position — could use small directional offsets from the hat center circle.
 - **Multi-page**: If a device has many bindings and labels become too crowded on A4, consider overflow to a second page or scaling adjustments.
 - **Caching OCR results**: Circle detection + OCR can be cached per image (by hash) to avoid re-running on every render.
+- **Seat discovery heuristics**: The DCS directory structure for multi-seat aircraft may vary across modules. The parser should handle known patterns (e.g., subdirectories named by role) and gracefully fall back to treating unrecognized structures as single-seat.
