@@ -514,7 +514,7 @@ For each button with a binding:
 │      outward in same preferred direction)                    │
 │    - Re-check collisions at extended position                │
 │    - If still colliding after max extension:                 │
-│      → Reduce font size for this label and retry             │
+│      → Apply more aggressive text abbreviation               │
 │      → If still failing: mark for force-directed pass        │
 └─────────────────────────┬───────────────────────────────────┘
                           │
@@ -556,12 +556,13 @@ For each button with a binding:
   ↑ padding: 3px horizontal, 2px vertical
 ```
 
-**Font sizing strategy:**
-- Base font size calculated relative to canvas DPI and device image scale
-- Preferred: 8-10pt equivalent at 300 DPI
-- Minimum: 6pt (below this, text becomes unreadable when printed)
-- Labels for long text may get slightly smaller font than short labels
-- All labels on one device image should use consistent font size where possible (only shrink individual labels as a last resort)
+**Font rules (strict single size):**
+- **All labels use exactly the same font family and size** — no per-label shrinking
+- Font family and size are configurable in `config.yaml` with sensible defaults
+- Default font: `DejaVu Sans` (bundled, open-source, good readability at small sizes)
+- Default size: `9pt` at 300 DPI (legible when printed on A4)
+- If labels overflow available space, the tool handles it via abbreviation and layout displacement — never by changing font size per-label
+- This ensures a clean, uniform appearance across the entire output image
 
 **Text content rules:**
 1. Use full DCS binding name if it fits within max label width
@@ -585,22 +586,28 @@ For devices with many closely-spaced buttons (e.g., throttle base panels):
 1. **Grouping**: If multiple buttons are within a cluster threshold distance, try to place labels on the same side of the cluster (reducing visual chaos)
 2. **Stacking**: Labels for a tight group can be stacked vertically with leader lines fanning out to their respective buttons
 3. **Overflow detection**: If more than N% of labels required force-directed nudging, log a warning suggesting the user increase image resolution or spread out markers
-4. **Scaling fallback**: If collision resolution fails to find non-overlapping placement for all labels, progressively reduce font size globally (to a minimum) before accepting some overlap
+4. **Abbreviation escalation**: If layout is too dense, apply progressively more aggressive abbreviation to all labels (never change font size — keep it uniform)
 
 #### 5.5 Rendering Configuration
 
 ```yaml
 rendering:
   background: white            # white | dark | transparent
-  font_size: auto              # auto | fixed pt value
-  min_font_size: 6             # minimum readable pt size
+  font_family: DejaVu Sans    # font family (must be a bundled or system-installed TTF)
+  font_size: 9                 # pt — single fixed size for ALL labels (default: 9)
+  title_font_size: 24          # pt — for aircraft/seat title heading
   label_opacity: 0.85          # background box opacity (0.0-1.0)
-  label_max_width: 200         # px max label width before wrapping/abbreviating
+  label_max_width: 200         # px max label width before abbreviating
   leader_line_threshold: 50    # px displacement before leader line is drawn
   margin: 40                   # px margin around device images
-  title_font_size: 24          # pt for aircraft/seat title
   device_spacing: 20           # px gap between left and right device images
 ```
+
+**Bundled fonts:**
+- `DejaVu Sans` (default) — clean sans-serif, excellent small-size readability
+- `DejaVu Sans Mono` — monospace alternative if user prefers fixed-width labels
+
+Users can also specify any TTF font installed on their system or placed in the project `fonts/` directory.
 
 #### 5.6 Original Circles Preserved
 
@@ -784,7 +791,6 @@ dcs-binding-visualizer/
 - [ ] Text abbreviation logic (remove suffixes, known abbreviations, truncation)
 - [ ] Title and aircraft name + seat/role header
 - [ ] Per-seat output file naming
-- [ ] Global font scaling fallback for extremely dense layouts
 
 ### Phase 4: Integration & Polish
 - [ ] Full pipeline: config → parse → detect → render → output
