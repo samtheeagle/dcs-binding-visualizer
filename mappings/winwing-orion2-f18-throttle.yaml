@@ -1,0 +1,143 @@
+# WinWing Orion 2 — F/A-18 Throttle Handles + Base
+# Default button mapping (Windows DCS button IDs)
+#
+# DCS Device Name: "WINWING Orion Throttle Base II + F18 HANDLE"
+# (newer firmware: "WINCTRL Orion Throttle Base II + F18 HANDLE")
+#
+# The F/A-18 throttle replicates the real F/A-18C Hornet throttle quadrant.
+# Total reported buttons: ~80 (handles + base combined)
+# The throttle has two handles (Left and Right) plus a base panel with
+# toggle switches, rotary encoders, and additional controls.
+#
+# Note: Your image should have numbered circles at each button/hat/switch location.
+# The numbers in this file (1, 2, 3...) correspond to the circled numbers on YOUR image.
+#
+# Sources:
+#   - WinWing SimAppPro button testing
+#   - DCS World controller configuration
+#   - Community maps from digitalcombatsimulator.com
+
+device_name: "WINWING Orion Throttle Base II + F18 HANDLE"
+device_name_alt: "WINCTRL Orion Throttle Base II + F18 HANDLE"
+description: "WinWing Orion 2 Throttle with F/A-18 Handles"
+
+# Axes provided by the throttle
+axes:
+  - id: "JOY_Z"
+    description: "Left Throttle Axis"
+  - id: "JOY_RZ"
+    description: "Right Throttle Axis"
+  - id: "JOY_SLIDER1"
+    description: "Antenna Elevation Wheel (Left Handle)"
+  - id: "JOY_SLIDER2"
+    description: "Radar Elevation Wheel (Right Handle)"
+
+# Maps the NUMBER visible in the image circle -> DCS button ID
+# --- LEFT HANDLE ---
+mappings:
+  # --- Comm Switch (4-way + push) - Left Handle ---
+  1: "JOY_BTN1"            # Comm Switch - Forward (COMM1)
+  2: "JOY_BTN2"            # Comm Switch - Aft (COMM2)
+  3: "JOY_BTN3"            # Comm Switch - Left (IFF)
+  4: "JOY_BTN4"            # Comm Switch - Right (ILS)
+  5: "JOY_BTN5"            # Comm Switch - Push (PLAIN)
+
+  # --- Throttle Designator Controller (4-way + push) - Left Handle ---
+  6: "JOY_BTN6"            # TDC - Forward (Up)
+  7: "JOY_BTN7"            # TDC - Aft (Down)
+  8: "JOY_BTN8"            # TDC - Left
+  9: "JOY_BTN9"            # TDC - Right
+  10: "JOY_BTN10"          # TDC - Push (Depress)
+
+  # --- Speed Brake - Left Handle ---
+  11: "JOY_BTN11"          # Speed Brake - Forward (Retract)
+  12: "JOY_BTN12"          # Speed Brake - Aft (Extend)
+
+  # --- Left Throttle Finger Lift ---
+  13: "JOY_BTN13"          # Left Finger Lift (Idle Detent)
+
+  # --- Dispenser / CM Switch (4-way + push) - Left Handle ---
+  14: "JOY_BTN14"          # Dispenser - Forward (ECM)
+  15: "JOY_BTN15"          # Dispenser - Aft (JETT)
+  16: "JOY_BTN16"          # Dispenser - Left (ALE-47 Manual)
+  17: "JOY_BTN17"          # Dispenser - Right (Bypass)
+  18: "JOY_BTN18"          # Dispenser - Push (Dispense)
+
+  # --- RIGHT HANDLE ---
+
+  # --- Mic Switch (4-way + push) - Right Handle ---
+  19: "JOY_BTN19"          # Mic Switch - Forward
+  20: "JOY_BTN20"          # Mic Switch - Aft
+  21: "JOY_BTN21"          # Mic Switch - Left
+  22: "JOY_BTN22"          # Mic Switch - Right
+  23: "JOY_BTN23"          # Mic Switch - Push
+
+  # --- Exterior Lights / Cage-Uncage - Right Handle ---
+  24: "JOY_BTN24"          # Cage/Uncage Button
+
+  # --- Right Throttle Finger Lift ---
+  25: "JOY_BTN25"          # Right Finger Lift (Idle Detent)
+
+  # --- A/A / A/G Selector - Right Handle ---
+  26: "JOY_BTN26"          # A/A Weapon Select - Forward
+  27: "JOY_BTN27"          # A/G Weapon Select - Aft
+
+  # --- Pinky Rocker - Right Handle ---
+  28: "JOY_BTN28"          # Pinky Rocker - Forward (External Stores)
+  29: "JOY_BTN29"          # Pinky Rocker - Aft (Jettison)
+
+  # --- BASE PANEL ---
+
+  # --- Toggle Switches Row (top row) ---
+  30: "JOY_BTN30"          # Toggle 1 - Up
+  31: "JOY_BTN31"          # Toggle 1 - Down
+  32: "JOY_BTN32"          # Toggle 2 - Up
+  33: "JOY_BTN33"          # Toggle 2 - Down
+  34: "JOY_BTN34"          # Toggle 3 - Up
+  35: "JOY_BTN35"          # Toggle 3 - Down
+  36: "JOY_BTN36"          # Toggle 4 - Up
+  37: "JOY_BTN37"          # Toggle 4 - Down
+
+  # --- Landing Gear ---
+  38: "JOY_BTN38"          # Landing Gear - Up
+  39: "JOY_BTN39"          # Landing Gear - Down
+
+  # --- Flaps ---
+  40: "JOY_BTN40"          # Flaps - Up (AUTO)
+  41: "JOY_BTN41"          # Flaps - Mid (HALF)
+  42: "JOY_BTN42"          # Flaps - Down (FULL)
+
+  # --- Launch Bar ---
+  43: "JOY_BTN43"          # Launch Bar - Extend
+  44: "JOY_BTN44"          # Launch Bar - Retract
+
+  # --- Hook ---
+  45: "JOY_BTN45"          # Arresting Hook - Down
+  46: "JOY_BTN46"          # Arresting Hook - Up
+
+  # --- Parking Brake ---
+  47: "JOY_BTN47"          # Parking Brake - On
+  48: "JOY_BTN48"          # Parking Brake - Off
+
+  # --- Anti-Skid ---
+  49: "JOY_BTN49"          # Anti-Skid - On
+  50: "JOY_BTN50"          # Anti-Skid - Off
+
+  # --- Rotary Encoder(s) on Base ---
+  51: "JOY_BTN51"          # Rotary 1 - CW (Clockwise)
+  52: "JOY_BTN52"          # Rotary 1 - CCW (Counter-Clockwise)
+  53: "JOY_BTN53"          # Rotary 1 - Push
+  54: "JOY_BTN54"          # Rotary 2 - CW
+  55: "JOY_BTN55"          # Rotary 2 - CCW
+  56: "JOY_BTN56"          # Rotary 2 - Push
+
+# Optional: Linux-specific overrides
+# On Linux (via HID driver), button numbers may differ significantly.
+# The kernel has an 80-button limit per HID device which may cut off
+# higher-numbered buttons on the base panel.
+# Use 'evtest' or 'jstest' to map your actual Linux button IDs.
+#
+# linux_overrides:
+#   1: "JOY_BTN1"
+#   2: "JOY_BTN2"
+#   # ... adjust based on evtest output on your system

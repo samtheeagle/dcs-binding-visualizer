@@ -1,0 +1,79 @@
+# WinWing Orion 2 EX — F/A-18 Stick Grip
+# Default button mapping (Windows DCS button IDs)
+#
+# DCS Device Name: "WINWING Orion Joystick Base 2 + JGRIP-F18"
+# (newer firmware: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F18")
+#
+# The F/A-18 stick grip replicates the real F/A-18C Hornet control stick.
+# Button numbering starts at BTN21 for the grip (BTN1-BTN20 are base buttons/axes).
+#
+# Note: Your image should have numbered circles at each button/hat/switch location.
+# The numbers in this file (1, 2, 3...) correspond to the circled numbers on YOUR image.
+# Adjust mappings below to match your specific image numbering.
+#
+# Sources:
+#   - WinWing SimAppPro button testing
+#   - DCS World controller configuration
+#   - Community button maps from digitalcombatsimulator.com
+
+device_name: "WINWING Orion Joystick Base 2 + JGRIP-F18"
+device_name_alt: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F18"
+description: "WinWing Orion 2 EX with F/A-18 Stick Grip"
+
+# Axes provided by the joystick base
+axes:
+  - id: "JOY_X"
+    description: "Stick Roll (Left/Right)"
+  - id: "JOY_Y"
+    description: "Stick Pitch (Forward/Back)"
+
+# Maps the NUMBER visible in the image circle -> DCS button ID
+# The (x, y) position is auto-detected from the image -- not specified here.
+mappings:
+  # --- Trigger ---
+  1: "JOY_BTN1"            # Trigger - First Detent (half press)
+  2: "JOY_BTN6"            # Trigger - Second Detent (full press)
+
+  # --- Weapon Release ---
+  3: "JOY_BTN2"            # Weapon Release Button (red, top-left of grip)
+
+  # --- Nosewheel Steering / Sensor Control ---
+  4: "JOY_BTN3"            # NWS / A/A Refuel Disconnect (paddle switch, rear)
+
+  # --- Trim Hat (4-way, no push) ---
+  5: "JOY_BTN_POV1_U"     # Trim Hat - Up (Forward)
+  6: "JOY_BTN_POV1_D"     # Trim Hat - Down (Aft)
+  7: "JOY_BTN_POV1_L"     # Trim Hat - Left
+  8: "JOY_BTN_POV1_R"     # Trim Hat - Right
+
+  # --- Castle / Sensor Control Hat (4-way + push) ---
+  9: "JOY_BTN_POV2_U"     # Castle Hat - Up (Forward)
+  10: "JOY_BTN_POV2_D"    # Castle Hat - Down (Aft)
+  11: "JOY_BTN_POV2_L"    # Castle Hat - Left
+  12: "JOY_BTN_POV2_R"    # Castle Hat - Right
+  13: "JOY_BTN7"           # Castle Hat - Push (Depress)
+
+  # --- TDC (Throttle Designator Controller) Hat (4-way + push) ---
+  14: "JOY_BTN_POV3_U"    # TDC Hat - Up (Forward)
+  15: "JOY_BTN_POV3_D"    # TDC Hat - Down (Aft)
+  16: "JOY_BTN_POV3_L"    # TDC Hat - Left
+  17: "JOY_BTN_POV3_R"    # TDC Hat - Right
+  18: "JOY_BTN8"           # TDC Hat - Push (Depress / TDC Depress)
+
+  # --- Paddle Switch (rear of grip) ---
+  19: "JOY_BTN4"           # Paddle Switch (A/P Disconnect / Undesignate)
+
+  # --- Pinky Button ---
+  20: "JOY_BTN5"           # Pinky Button (lower rear)
+
+# Optional: Linux-specific overrides
+# On Linux, the HID driver may remap button numbers differently.
+# The kernel has an 80-button limit per HID device.
+# Use 'jstest' or 'evtest' on your system to determine actual Linux button numbers.
+# Uncomment and adjust as needed based on your system's actual mappings.
+#
+# linux_overrides:
+#   1: "JOY_BTN1"
+#   2: "JOY_BTN6"
+#   3: "JOY_BTN2"
+#   # ... etc - run 'evtest /dev/input/eventXX' to discover your mapping
