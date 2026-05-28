@@ -114,24 +114,126 @@ The tool should auto-discover seats without requiring manual configuration. Sing
 - `slpp` (Simple Lua Preprocessor for Python — parses Lua tables to Python dicts)
 - Custom regex-based parser as fallback
 
-### 3. Device Image OCR & Circle Detection
+### 3. Device Image Circle Detection & OCR (Critical Component)
 
-Automatically locate numbered button markers on device images:
+This is the core mechanism that eliminates manual coordinate entry. The tool must reliably detect numbered circles in device images and extract both their position and the number they contain.
 
-1. **Circle detection**: Use OpenCV (`cv2.HoughCircles` or contour detection) to find white circles on the image
-2. **OCR**: Use Tesseract (`pytesseract`) to read the number inside each detected circle
-3. **Output**: A mapping of `{image_number: (x, y)}` pixel coordinates
+#### 3.1 Detection Pipeline (Detailed)
 
-**Image requirements for users:**
-- Device photo/diagram on any background
-- Each button/hat/axis position marked with a white circle containing a black number
-- Circles should be reasonably sized and non-overlapping
-
-**Detection pipeline:**
 ```
-Image → Grayscale → Threshold → Find contours (circles) → 
-Extract ROI per circle → OCR each ROI → Return {number: (x, y)}
+Input Image
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│ Step 1: Preprocessing                                │
+│  - Convert to grayscale                              │
+│  - Apply Gaussian blur (reduce noise)                │
+│  - Adaptive thresholding (handle varied backgrounds) │
+└─────────────────────┬───────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│ Step 2: Circle/Marker Detection                      │
+│  - Find contours in thresholded image                │
+│  - Filter by:                                        │
+│    • Circularity (ratio of area to perimeter²)       │
+│    • Aspect ratio (width/height ≈ 1.0)              │
+│    • Area (min/max size thresholds)                  │
+│    • Solidity (convex hull fill ratio)               │
+│  - Alternatively: HoughCircles with tuned params     │
+│  - Output: list of candidate circle bounding boxes   │
+└─────────────────────┬───────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│ Step 3: Circle Validation                            │
+│  - Verify white fill (mean pixel intensity > thresh) │
+│  - Check for dark content inside (indicates number)  │
+│  - Reject false positives (solid circles, artifacts) │
+│  - Output: validated circle regions with centers     │
+└─────────────────────┬───────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│ Step 4: Number Extraction (OCR)                      │
+│  - Crop each validated circle with padding           │
+│  - Preprocess ROI for OCR:                           │
+│    • Resize to consistent height (e.g., 48px)        │
+│    • Binarize (pure black text on white)             │
+│    • Invert if needed                                │
+│  - Run Tesseract with digit-only config:             │
+│    --psm 7 (single line) -c tessedit_char_whitelist= │
+│    0123456789                                        │
+│  - Validate: reject non-numeric / multi-digit where  │
+│    unexpected                                        │
+│  - Output: {number: (center_x, center_y)} mapping    │
+└─────────────────────┬───────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│ Step 5: Result Caching & Verification                │
+│  - Cache results keyed by image file hash (SHA256)   │
+│  - Skip re-detection if image unchanged              │
+│  - Log warnings for:                                 │
+│    • Duplicate numbers detected                      │
+│    • Expected numbers missing (from mapping file)    │
+│    • Low-confidence OCR reads                        │
+└─────────────────────────────────────────────────────┘
 ```
+
+#### 3.2 Handling Edge Cases
+
+| Scenario | Strategy |
+|----------|----------|
+| Multi-digit numbers (10+) | OCR config allows multi-digit; validate against mapping file expected range |
+| Circles partially obscured by device edges | Detect partial contours; use minimum enclosing circle estimation |
+| Varying circle sizes in one image | Use relative size filtering (within 2× of median detected size) |
+| Similar-looking device features (knobs, screws) | White-fill + dark-content validation eliminates most false positives |
+| Low contrast images | Adaptive thresholding (ADAPTIVE_THRESH_GAUSSIAN_C) handles local contrast |
+| Numbers touching circle edge | Add padding when cropping ROI for OCR |
+| Blurry or low-res images | Warn user; provide minimum recommended resolution in docs |
+
+#### 3.3 Detection Tuning & Debug Tools
+
+The `detect-buttons` CLI command provides visual debugging:
+
+```bash
+# Run detection and output annotated debug image
+dcs-bindings detect-buttons --image images/winwing-stick.png --debug
+
+# Output:
+#   images/winwing-stick_detected.png  (annotated with detected circles + numbers)
+#   images/winwing-stick_positions.yaml (detected positions for review)
+```
+
+The debug image will show:
+- Green circles around successfully detected + OCR'd markers
+- Red circles around candidates that failed validation
+- Yellow circles around low-confidence OCR results
+- Number label next to each detection showing what was read
+
+**Tuning parameters** (configurable in config.yaml or CLI flags):
+```yaml
+detection:
+  min_circle_radius: 10        # px - minimum marker radius
+  max_circle_radius: 60        # px - maximum marker radius
+  circularity_threshold: 0.7   # 1.0 = perfect circle
+  min_white_fill: 200          # mean grayscale value inside circle (0-255)
+  ocr_confidence_threshold: 60 # Tesseract confidence minimum (0-100)
+  gaussian_blur_kernel: 5      # preprocessing blur kernel size
+```
+
+#### 3.4 Image Requirements for Users
+
+To ensure reliable detection, user-provided device images should follow these guidelines:
+
+- **Marker style**: White filled circle with black number centered inside
+- **Marker size**: Minimum ~20px radius at final image resolution; consistent size preferred
+- **Contrast**: Circles should contrast clearly against the device background
+- **Spacing**: Markers should not overlap or touch each other
+- **Numbers**: Clear, simple digits (sans-serif style works best for OCR)
+- **Resolution**: Minimum 150 DPI equivalent; higher is better for OCR accuracy
+- **Format**: PNG preferred (lossless); JPEG acceptable if high quality
 
 ### 4. Button Number Mapping (ID only — no coordinates)
 
@@ -159,34 +261,170 @@ linux_overrides:
 
 This handles the Linux driver reordering problem. The user maintains one mapping file per device that only defines number-to-ID relationships — the tool handles all spatial/position detection automatically from the image.
 
-### 5. Image Renderer
+### 5. Image Renderer & Label Layout Engine (Critical Component)
+
+The renderer must produce clean, readable output even when buttons are densely packed. This requires a sophisticated label placement algorithm that avoids overlaps and maintains visual clarity.
+
+#### 5.1 Canvas Composition
 
 Uses **Pillow** (PIL) to compose the final output:
 
 **Canvas setup:**
 - A4 landscape: 3508 × 2480 px at 300 DPI (or 1754 × 1240 at 150 DPI)
 - White or dark background (configurable)
-- Left half: device 1 image (scaled to fit)
-- Right half: device 2 image (scaled to fit)
+- Left half: device 1 image (scaled to fit with margin)
+- Right half: device 2 image (scaled to fit with margin)
 - Title bar at top: aircraft name + seat/role (e.g., "AH-64D Apache — Pilot")
+- Margins: configurable padding around each device image to leave room for labels that extend beyond the device boundary
 
-**Label rendering:**
-- For each bound button:
-  - Find the (x, y) position from OCR detection (scaled to final image coords)
-  - Render binding name as text near the button circle
-  - Use a semi-transparent background box behind text for readability
-  - Text placement: prefer to the right/below the circle, with collision avoidance
-- Original numbered circles remain visible
-- Unbound buttons: left blank (no label rendered)
+**Coordinate scaling:**
+- Button positions detected from the original device image must be scaled proportionally when the image is resized to fit the A4 canvas
+- Maintain aspect ratio of device images
+- Store the scale factor and offset for accurate position mapping
 
-**Text handling:**
-- Use full DCS binding names where space allows
-- Abbreviate long names if they would overlap other labels (e.g., "Countermeasures Dispense Btn" → "CM Dispense")
-- Font: bundled TTF (e.g., DejaVu Sans or similar open-source font)
+#### 5.2 Label Layout Algorithm (Anti-Collision)
+
+This is the most critical rendering logic. Labels must be placed near their associated button without overlapping other labels or obscuring important parts of the device image.
+
+**Strategy: Force-directed label placement with priority zones**
+
+```
+For each button with a binding:
+    1. Calculate ideal label position (preferred offset from button center)
+    2. Check for collisions with existing placed labels
+    3. If collision: try alternative positions in priority order
+    4. If all positions collide: use force-directed nudging
+    5. Draw leader line from label to button if displaced far
+```
+
+**Step-by-step algorithm:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 1: Initial Placement                                   │
+│                                                              │
+│  For each button (sorted by position, top-to-bottom,         │
+│  left-to-right):                                             │
+│    - Calculate text bounding box at preferred font size      │
+│    - Try placement at 8 candidate positions around button:   │
+│      Priority order:                                         │
+│        1. Right of button (most readable for LTR text)       │
+│        2. Left of button                                     │
+│        3. Above button                                       │
+│        4. Below button                                       │
+│        5. Upper-right diagonal                               │
+│        6. Lower-right diagonal                               │
+│        7. Upper-left diagonal                                │
+│        8. Lower-left diagonal                                │
+│    - Place at first position with no collision               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 2: Collision Resolution                                │
+│                                                              │
+│  For any label that couldn't be placed without collision:    │
+│    - Increase displacement distance from button (extend      │
+│      outward in same preferred direction)                    │
+│    - Re-check collisions at extended position                │
+│    - If still colliding after max extension:                 │
+│      → Reduce font size for this label and retry             │
+│      → If still failing: mark for force-directed pass        │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 3: Force-Directed Nudging (remaining conflicts)        │
+│                                                              │
+│  Treat overlapping labels as particles with repulsion:       │
+│    - Each label exerts a repulsive force on overlapping      │
+│      neighbors                                               │
+│    - Each label has an attractive force toward its button    │
+│    - Iterate until equilibrium (max N iterations)            │
+│    - Constraint: labels must stay within canvas bounds       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 4: Leader Lines                                        │
+│                                                              │
+│  For labels displaced more than threshold distance from      │
+│  their button:                                               │
+│    - Draw a thin leader line from label edge to button       │
+│      circle                                                  │
+│    - Line style: thin, semi-transparent, with a small dot    │
+│      or arrow at the button end                              │
+│    - Avoid crossing other labels where possible              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 5.3 Label Rendering Details
+
+**Label box anatomy:**
+```
+┌─────────────────────────┐
+│  Weapon Release  [M]    │  ← text + optional modifier indicator
+└─────────────────────────┘
+  ↑ semi-transparent background (e.g., white @ 85% opacity)
+  ↑ thin border (1px, dark gray)
+  ↑ padding: 3px horizontal, 2px vertical
+```
+
+**Font sizing strategy:**
+- Base font size calculated relative to canvas DPI and device image scale
+- Preferred: 8-10pt equivalent at 300 DPI
+- Minimum: 6pt (below this, text becomes unreadable when printed)
+- Labels for long text may get slightly smaller font than short labels
+- All labels on one device image should use consistent font size where possible (only shrink individual labels as a last resort)
+
+**Text content rules:**
+1. Use full DCS binding name if it fits within max label width
+2. If too long, apply abbreviation rules:
+   - Remove common suffixes ("Button", "Switch", "Btn")
+   - Abbreviate known terms ("Countermeasures" → "CM", "Communication" → "Comm")
+   - Truncate with ellipsis as last resort ("Counter..." )
+3. Max label width: configurable, default ~40% of device image half-width
+
+**Color and contrast:**
+- Label background: white with 85% opacity (allows device image to show through slightly)
+- Text color: black (or dark gray)
+- Border: 1px medium gray
+- Leader lines: medium gray, 1px, slight transparency
+- Modifier indicators: small colored badge or bracketed text (e.g., `[S]` for shift modifier)
+
+#### 5.4 Dense Layout Handling
+
+For devices with many closely-spaced buttons (e.g., throttle base panels):
+
+1. **Grouping**: If multiple buttons are within a cluster threshold distance, try to place labels on the same side of the cluster (reducing visual chaos)
+2. **Stacking**: Labels for a tight group can be stacked vertically with leader lines fanning out to their respective buttons
+3. **Overflow detection**: If more than N% of labels required force-directed nudging, log a warning suggesting the user increase image resolution or spread out markers
+4. **Scaling fallback**: If collision resolution fails to find non-overlapping placement for all labels, progressively reduce font size globally (to a minimum) before accepting some overlap
+
+#### 5.5 Rendering Configuration
+
+```yaml
+rendering:
+  background: white            # white | dark | transparent
+  font_size: auto              # auto | fixed pt value
+  min_font_size: 6             # minimum readable pt size
+  label_opacity: 0.85          # background box opacity (0.0-1.0)
+  label_max_width: 200         # px max label width before wrapping/abbreviating
+  leader_line_threshold: 50    # px displacement before leader line is drawn
+  margin: 40                   # px margin around device images
+  title_font_size: 24          # pt for aircraft/seat title
+  device_spacing: 20           # px gap between left and right device images
+```
+
+#### 5.6 Original Circles Preserved
+
+- The numbered circle markers in the source image remain visible in the output
+- Labels are placed adjacent to (not on top of) the circles
+- This allows the user to cross-reference the image number with the mapping file if needed
 
 **Modifier support:**
 - If a binding uses a modifier, append modifier indicator (e.g., "[MOD]" prefix or color coding)
-- Optionally render a small legend explaining modifier notation
+- Optionally render a small legend explaining modifier notation at the bottom of the page
 
 ---
 
@@ -241,10 +479,14 @@ dcs-binding-visualizer/
 │       ├── cli.py              # Click/argparse CLI entry point
 │       ├── config.py           # Config loading & validation
 │       ├── lua_parser.py       # DCS Lua table parser
-│       ├── ocr_detector.py     # Circle detection + OCR
+│       ├── detector.py         # Circle detection (OpenCV contours, filtering)
+│       ├── ocr.py              # OCR number reading (Tesseract integration)
+│       ├── detection_cache.py  # Cache detected positions by image hash
 │       ├── mapping.py          # Button number mapping logic
-│       ├── renderer.py         # Pillow-based image composition
-│       └── models.py           # Data models (Binding, Device, etc.)
+│       ├── layout.py           # Label placement algorithm (collision avoidance, force-directed)
+│       ├── renderer.py         # Pillow-based image composition & drawing
+│       ├── abbreviations.py    # Text abbreviation rules for long binding names
+│       └── models.py           # Data models (Binding, Device, LabelBox, etc.)
 │
 ├── images/                     # User-provided device images (gitignored)
 │   └── .gitkeep
@@ -262,8 +504,14 @@ dcs-binding-visualizer/
 │
 └── tests/
     ├── test_lua_parser.py
-    ├── test_ocr_detector.py
-    └── test_renderer.py
+    ├── test_detector.py        # Circle detection unit tests
+    ├── test_ocr.py             # OCR extraction tests
+    ├── test_layout.py          # Label placement algorithm tests
+    ├── test_renderer.py
+    └── test_fixtures/          # Sample images with known circle positions
+        ├── simple_3_buttons.png
+        ├── dense_20_buttons.png
+        └── expected_positions.yaml
 ```
 
 ---
@@ -272,15 +520,19 @@ dcs-binding-visualizer/
 
 | Package | Purpose |
 |---------|---------|
-| `Pillow` | Image rendering and composition |
-| `opencv-python` | Circle/contour detection on device images |
-| `pytesseract` | OCR to read numbers inside circles |
+| `Pillow` | Image rendering, composition, and text drawing |
+| `opencv-python` | Circle/contour detection, image preprocessing |
+| `numpy` | Array operations for OpenCV image processing |
+| `pytesseract` | OCR to read numbers inside detected circles |
 | `slpp` or `lupa` | Lua table parsing for DCS config files |
 | `PyYAML` | Configuration file parsing |
 | `click` | CLI framework |
 
 **System dependencies:**
 - Tesseract OCR engine (available via package manager on all platforms)
+  - Linux: `sudo dnf install tesseract` (Fedora/Nobara) or `sudo apt install tesseract-ocr`
+  - macOS: `brew install tesseract`
+  - Windows: installer from https://github.com/UB-Mannheim/tesseract/wiki
 
 ---
 
@@ -292,19 +544,34 @@ dcs-binding-visualizer/
 - [ ] DCS Lua config parser (read binding files, extract assignments)
 - [ ] Multi-seat detection (auto-discover crew positions per aircraft)
 
-### Phase 2: Image Detection
-- [ ] Circle detection (OpenCV contours on device images)
-- [ ] OCR integration (read numbers from detected circles)
-- [ ] Position mapping output (generate/cache detected positions)
-- [ ] Detection preview command (visual debug output)
+### Phase 2: Image Detection (Critical Path)
+- [ ] Circle detection via OpenCV contour analysis
+- [ ] Circularity, aspect ratio, and size filtering
+- [ ] White-fill validation (reject false positives)
+- [ ] OCR integration with Tesseract (digit-only, single-line mode)
+- [ ] Multi-digit number support
+- [ ] Confidence scoring and low-confidence warnings
+- [ ] Result caching by image hash (SHA256)
+- [ ] Detection debug/preview command with annotated output image
+- [ ] Configurable detection tuning parameters
+- [ ] Edge case handling (partial circles, varied sizes, low contrast)
 
-### Phase 3: Rendering
-- [ ] A4 landscape canvas setup
-- [ ] Device image scaling and placement (two-up layout)
-- [ ] Label rendering with background boxes
-- [ ] Text placement with basic collision avoidance
+### Phase 3: Rendering & Label Layout (Critical Path)
+- [ ] A4 landscape canvas setup with configurable margins
+- [ ] Device image scaling with aspect ratio preservation
+- [ ] Coordinate transformation (detected positions → canvas positions)
+- [ ] Label text rendering with semi-transparent background boxes
+- [ ] 8-position candidate placement algorithm (right, left, above, below, diagonals)
+- [ ] Collision detection between label bounding boxes
+- [ ] Extended displacement for colliding labels
+- [ ] Font size reduction for individual long labels
+- [ ] Force-directed nudging for remaining overlaps
+- [ ] Leader line rendering for displaced labels
+- [ ] Dense cluster detection and grouped label stacking
+- [ ] Text abbreviation logic (remove suffixes, known abbreviations, truncation)
 - [ ] Title and aircraft name + seat/role header
 - [ ] Per-seat output file naming
+- [ ] Global font scaling fallback for extremely dense layouts
 
 ### Phase 4: Integration & Polish
 - [ ] Full pipeline: config → parse → detect → render → output
