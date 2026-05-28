@@ -16,6 +16,18 @@ A Python CLI utility that reads joystick/HOTAS button mappings from DCS World co
 
 ## Architecture
 
+### Key Principle: Image Detection is a One-Time Operation
+
+**Image detection (circle finding + OCR) runs only once per device image.** The detected button positions are cached persistently to a file. Subsequent runs of the tool (e.g., re-rendering after changing aircraft bindings) load positions from the cache and skip detection entirely. Detection only re-runs if:
+
+- The device image file has changed (detected via SHA256 hash comparison)
+- The user explicitly requests re-detection (e.g., `--force-detect` flag)
+- No cache file exists yet for that image
+
+This means the normal workflow is:
+1. **First run (or after image change)**: Detection runs → positions cached → render executes
+2. **All subsequent runs**: Cached positions loaded instantly → render executes (fast)
+
 ### High-Level Flow
 
 ```
@@ -27,8 +39,16 @@ A Python CLI utility that reads joystick/HOTAS button mappings from DCS World co
 ┌─────────────────┐     ┌──────────────────┐              │
 │ Device Images   │────▶│  OCR / Circle    │──┐           │
 │ (numbered)       │     │  Detection       │  │           │
+│                  │     │ (ONE-TIME only,  │  │           │
+│                  │     │  results cached) │  │           │
 └─────────────────┘     └──────────────────┘  │           │
-                                               ▼           ▼
+                                               ▼           │
+                              ┌───────────────────────┐    │
+                              │  Position Cache File  │    │
+                              │  (.yaml per image)    │    │
+                              └───────────┬───────────┘    │
+                                          │                │
+                                          ▼                ▼
                                       ┌────────────────────────────┐
                                       │  Button Position Mapping   │
                                       │  (image# → DCS button ID)  │
@@ -171,9 +191,19 @@ Input Image
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 5: Result Caching & Verification                │
-│  - Cache results keyed by image file hash (SHA256)   │
-│  - Skip re-detection if image unchanged              │
+│ Step 5: Persistent Cache (CRITICAL)                  │
+│  - Save results to a YAML/JSON file per image:       │
+│    e.g., .cache/winwing-stick_positions.yaml         │
+│  - Cache file contains:                              │
+│    • Source image SHA256 hash                        │
+│    • Detected positions: {number: (x, y)}            │
+│    • Detection timestamp                             │
+│    • Detection parameters used                       │
+│  - On subsequent runs:                               │
+│    1. Compute hash of current image                  │
+│    2. If hash matches cache → load positions (FAST)  │
+│    3. If hash differs → re-run detection pipeline    │
+│  - CLI flag: --force-detect to bypass cache          │
 │  - Log warnings for:                                 │
 │    • Duplicate numbers detected                      │
 │    • Expected numbers missing (from mapping file)    │
@@ -432,6 +462,7 @@ rendering:
 
 ```bash
 # Generate all aircraft binding images (all seats)
+# Normal operation: uses cached button positions (fast)
 dcs-bindings render --config config.yaml
 
 # Generate for a specific aircraft (all seats)
@@ -440,15 +471,23 @@ dcs-bindings render --config config.yaml --aircraft "AH-64D_BLK_II"
 # Generate for a specific aircraft and seat only
 dcs-bindings render --config config.yaml --aircraft "AH-64D_BLK_II" --seat "Pilot"
 
+# Force re-detection of button positions from images (ignores cache)
+dcs-bindings render --config config.yaml --force-detect
+
 # List detected aircraft profiles (shows seats where applicable)
 dcs-bindings list-aircraft --config config.yaml
 
-# Detect and preview button positions from a device image (for setup/debugging)
+# Run detection on a device image and save to cache (for initial setup / debugging)
 dcs-bindings detect-buttons --image images/winwing-orion2-stick.png
+
+# Run detection with debug overlay image output
+dcs-bindings detect-buttons --image images/winwing-orion2-stick.png --debug
 
 # Validate configuration and mappings
 dcs-bindings validate --config config.yaml
 ```
+
+**Performance note:** The `render` command is designed to be fast on repeat runs. Image detection (the slow OpenCV + OCR step) only runs once per device image and is cached. Changing DCS bindings (new aircraft, updated controls) triggers only the fast re-render path — no image re-analysis needed.
 
 **Example `list-aircraft` output:**
 ```
@@ -501,6 +540,9 @@ dcs-binding-visualizer/
 │
 ├── output/                     # Generated images (gitignored)
 │   └── .gitkeep
+│
+├── .cache/                     # Detected button positions cache (gitignored)
+│   └── .gitkeep               # Auto-populated with YAML files per device image
 │
 └── tests/
     ├── test_lua_parser.py
@@ -601,6 +643,7 @@ dcs-binding-visualizer/
 | A4 landscape with two devices | Fits stick + throttle/collective on one printable sheet |
 | Labels near buttons (not legend table) | More intuitive — see the binding right where the button is |
 | Auto-detect multi-seat aircraft | No manual configuration needed — tool discovers seats from DCS directory structure and generates separate images per seat |
+| One-time image detection with persistent cache | Image OCR/detection is slow — runs only once per image, results cached to disk. Subsequent renders are fast (just reads cache + DCS bindings). Re-detection only on image change or explicit `--force-detect` |
 
 ---
 
@@ -609,5 +652,4 @@ dcs-binding-visualizer/
 - **DCS device naming**: DCS uses internal device names that may differ from marketing names. The mapping file `device_name` field will need to match what DCS uses in its config paths. The `list-aircraft` command should help users discover these.
 - **Hat switches**: Hats have multiple directions (up/down/left/right/press). Each direction may need its own label position — could use small directional offsets from the hat center circle.
 - **Multi-page**: If a device has many bindings and labels become too crowded on A4, consider overflow to a second page or scaling adjustments.
-- **Caching OCR results**: Circle detection + OCR can be cached per image (by hash) to avoid re-running on every render.
 - **Seat discovery heuristics**: The DCS directory structure for multi-seat aircraft may vary across modules. The parser should handle known patterns (e.g., subdirectories named by role) and gracefully fall back to treating unrecognized structures as single-seat.
