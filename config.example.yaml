@@ -1,0 +1,53 @@
+# DCS Binding Visualizer — Example Configuration
+# Copy this file to config.yaml and edit to match your setup.
+# Or run 'dcs-bindings init' for an interactive setup wizard.
+
+# ─── DCS Paths ───────────────────────────────────────────────
+dcs:
+  install_dir: "/path/to/DCS World"
+  saved_games_dir: "/path/to/Saved Games/DCS"
+
+# ─── Device Configuration ────────────────────────────────────
+# Define your physical input devices (stick, throttle, collective, etc.)
+devices:
+  - name: "WinWing Orion 2 EX (F-16EX Stick)"
+    image: "images/winwing-f16ex-stick.png"
+    button_mapping: "mappings/winwing-orion2-f16ex-stick.yaml"
+    position: left  # placement on the A4 page (left or right)
+
+  - name: "WinWing Orion 2 (F-18 Throttle)"
+    image: "images/winwing-f18-throttle.png"
+    button_mapping: "mappings/winwing-orion2-f18-throttle.yaml"
+    position: right
+
+# ─── Detection Settings ──────────────────────────────────────
+# Controls how button markers are detected in device images.
+detection:
+  marker_colour: green          # preset: green, magenta, cyan — or hex: "#RRGGBB"
+  hue_tolerance: 15             # ± degrees around target hue in HSV space
+  saturation_min: 100           # minimum saturation (0-255)
+  value_min: 100                # minimum brightness (0-255)
+  min_marker_area: 300          # px² — minimum contour area to consider
+  circularity_threshold: 0.6    # 1.0 = perfect circle (lower = more lenient)
+  ocr_confidence_threshold: 60  # Tesseract confidence minimum (0-100)
+
+# ─── Rendering Settings ──────────────────────────────────────
+# Controls the appearance of the output images.
+rendering:
+  dpi: 300                     # output resolution (300 recommended for print)
+  background: white            # white | dark | transparent
+  font_family: DejaVu Sans    # font family (bundled or system-installed TTF)
+  font_size: 9                 # pt — single fixed size for ALL labels
+  title_font_size: 24          # pt — for aircraft/seat title heading
+  label_opacity: 0.85          # background box opacity (0.0-1.0)
+  label_max_width: 200         # px max label width before abbreviating
+  leader_line_threshold: 50    # px displacement before leader line is drawn
+  margin: 40                   # px margin around device images
+  device_spacing: 20           # px gap between left and right device images
+
+# ─── Output Settings ─────────────────────────────────────────
+output:
+  format: png                  # output image format
+  page_size: A4                # page size for layout
+  orientation: landscape       # landscape | portrait
+  output_dir: "output/"        # where generated images are saved
