@@ -28,6 +28,8 @@ This means the normal workflow is:
 1. **First run (or after image change)**: Detection runs → positions cached → render executes
 2. **All subsequent runs**: Cached positions loaded instantly → render executes (fast)
 
+**Important:** Only image detection results are cached. DCS binding data (Lua files) is **always read fresh on every render** — never cached. This ensures the output always reflects the user's current binding configuration without needing manual cache invalidation.
+
 ### High-Level Flow
 
 ```
@@ -468,17 +470,18 @@ To ensure reliable detection, user-provided device images should follow these gu
 The user never specifies (x, y) positions. All button positions are determined automatically by the image detection pipeline (Component 3). The mapping file's sole purpose is to translate the number found in the image to the corresponding DCS button ID:
 
 ```yaml
-# mappings/winwing-orion2-stick.yaml
-device_name: "F18 Stick"  # as DCS identifies it
+# mappings/winwing-orion2-f16ex-stick.yaml
+device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
+device_name_alt: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
 
 # Maps the NUMBER visible in the image circle → DCS button ID
 # The (x, y) position is auto-detected from the image — not specified here
 mappings:
-  1: "JOY_BTN1"
-  2: "JOY_BTN2"
-  3: "JOY_BTN3"
-  4: "JOY_BTN_POV1_U"  # hat up
-  5: "JOY_BTN_POV1_D"  # hat down
+  1: "JOY_BTN1"            # Trigger - First Detent
+  2: "JOY_BTN6"            # Trigger - Second Detent
+  3: "JOY_BTN2"            # Pickle Button
+  4: "JOY_BTN_POV1_U"     # TMS - Up
+  5: "JOY_BTN_POV1_D"     # TMS - Down
   # ... etc
 
 # Optional: Linux-specific overrides (same format, different IDs)
@@ -486,6 +489,8 @@ linux_overrides:
   1: "JOY_BTN3"   # Linux driver remaps btn1 → btn3
   2: "JOY_BTN1"
 ```
+
+**Device-to-DCS matching:** When the tool searches for bindings, it scans the device directories under `Config/Input/<aircraft>/` and matches against the `device_name` (and `device_name_alt`) field using **substring matching**. DCS device folder names include a GUID suffix (e.g., `WINWING Orion Joystick Base 2 + JGRIP-F16 {E1324450-...}`), so the tool matches if the folder name **starts with** the `device_name` string. If no match is found for a device, the tool logs a warning and skips that device for that aircraft (the other device will still render with its bindings).
 
 This handles the Linux driver reordering problem. The user maintains one mapping file per device that only defines number-to-ID relationships — the tool handles all spatial/position detection automatically from the image.
 
@@ -634,6 +639,7 @@ For devices with many closely-spaced buttons (e.g., throttle base panels):
 
 ```yaml
 rendering:
+  dpi: 300                     # output resolution (300 recommended for print)
   background: white            # white | dark | transparent
   font_family: DejaVu Sans    # font family (must be a bundled or system-installed TTF)
   font_size: 9                 # pt — single fixed size for ALL labels (default: 9)
@@ -727,7 +733,7 @@ dcs-bindings render --config config.yaml --verbose
 | `--seat <name>` | Render a specific seat only (requires `--aircraft`) |
 | `--force-detect` | Re-run image detection ignoring the cache |
 | `--output-dir <path>` | Override output directory from config |
-| `--dry-run` | Show what would be generated without rendering |
+| `--dry-run` | Show what would be generated without rendering (still prompts for aircraft selection unless `--aircraft` is used) |
 
 **`--dry-run` example output:**
 ```
@@ -928,7 +934,13 @@ dcs-binding-visualizer/
 
 ## Open Considerations
 
-- **DCS device naming**: DCS uses internal device names that may differ from marketing names. The mapping file `device_name` field will need to match what DCS uses in its config paths. The `list-aircraft` command should help users discover these.
-- **Hat switches**: Hats have multiple directions (up/down/left/right/press). Each direction may need its own label position — could use small directional offsets from the hat center circle.
 - **Multi-page**: If a device has many bindings and labels become too crowded on A4, consider overflow to a second page or scaling adjustments.
 - **Seat discovery heuristics**: The DCS directory structure for multi-seat aircraft may vary across modules. The parser should handle known patterns (e.g., subdirectories named by role) and gracefully fall back to treating unrecognized structures as single-seat.
+
+## Decided Design Details
+
+These were previously open considerations and have now been resolved:
+
+- **DCS device naming & matching**: The mapping file `device_name` field is matched against DCS device directories using **starts-with substring matching** (ignoring GUID suffixes). Both `device_name` and `device_name_alt` are tried. If no match is found, the device is skipped with a warning.
+- **Hat switches**: Each hat direction gets its **own numbered circle** on the device image. A 4-way hat = 4 circles (e.g., numbered 6, 7, 8, 9 for up/down/left/right). A 5-way hat (4-way + push) = 5 circles. The mapping file maps each to its own DCS button ID (`JOY_BTN_POV1_U`, `JOY_BTN_POV1_D`, etc.). This keeps the system simple and consistent — every bindable input gets one marker.
+- **Binding data freshness**: DCS Lua binding files are always read fresh on every render — never cached. Only image detection (positions) is cached.
