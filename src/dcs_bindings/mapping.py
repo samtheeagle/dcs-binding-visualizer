@@ -60,7 +60,10 @@ def resolve_button_positions(
     Returns:
         List of ButtonPosition objects with DCS button IDs and positions
     """
-    # Determine which mapping set to use
+    # Determine which mapping set to use.
+    # DCS via Proton/Wine sees Linux HID button IDs, which differ from Windows
+    # (e.g., POV hats become regular buttons, some devices have offsets).
+    # Use linux_overrides when running on Linux if they are defined.
     if use_linux_overrides is None:
         use_linux_overrides = platform.system() == "Linux"
 

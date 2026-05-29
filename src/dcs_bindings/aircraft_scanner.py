@@ -1,13 +1,28 @@
 """Scan DCS saved games directory for installed aircraft and their seats."""
 
+import re
 from pathlib import Path
 from typing import Optional
 
 from .models import AircraftProfile
 
+# Known multi-seat aircraft patterns: base_name -> {suffix: seat_display_name}
+MULTI_SEAT_PATTERNS = {
+    "AH-64D_BLK_II": {"_PLT": "Pilot", "_CPG": "CPG"},
+    "F-14B": {"-Pilot": "Pilot", "-RIO": "RIO"},
+    "Mi-24P": {"_pilot": "Pilot", "_operator": "Operator"},
+}
+
+# Directories to skip (not actual flyable aircraft profiles)
+SKIP_SUFFIXES = ("_AI_Menu", "_AimingStation")
+SKIP_NAMES = {"UiLayer", "disabled.lua", "F-14", "F-14_RIO", "SA342 Pilot"}
+
 
 def scan_aircraft(input_config_path: Path) -> list[AircraftProfile]:
     """Scan the DCS input config directory for aircraft with joystick bindings.
+
+    DCS structure: <Input>/<aircraft>/joystick/<device>.diff.lua
+    Multi-seat aircraft use separate top-level dirs with seat suffixes.
 
     Args:
         input_config_path: Path to <saved_games>/Config/Input/
@@ -15,136 +30,104 @@ def scan_aircraft(input_config_path: Path) -> list[AircraftProfile]:
     Returns:
         List of AircraftProfile with detected seats.
     """
-    profiles: list[AircraftProfile] = []
-
     if not input_config_path.exists():
-        return profiles
+        return []
 
-    for aircraft_dir in sorted(input_config_path.iterdir()):
-        if not aircraft_dir.is_dir():
+    # Collect all directories that have joystick bindings
+    aircraft_dirs: list[str] = []
+    for item in sorted(input_config_path.iterdir()):
+        if not item.is_dir():
             continue
-
-        # Skip non-aircraft directories
-        name = aircraft_dir.name
-        if name.startswith(".") or name in ("__MACOSX",):
+        if item.name in SKIP_NAMES or item.name.startswith("."):
             continue
+        if any(item.name.endswith(s) for s in SKIP_SUFFIXES):
+            continue
+        joystick_dir = item / "joystick"
+        if joystick_dir.exists() and any(joystick_dir.glob("*.lua")):
+            aircraft_dirs.append(item.name)
 
-        # Detect seats and check for joystick bindings
-        seats = _detect_seats(aircraft_dir)
-        has_bindings = _has_joystick_bindings(aircraft_dir)
-
-        if has_bindings:
-            profiles.append(
-                AircraftProfile(
-                    name=name,
-                    display_name=_format_display_name(name),
-                    seats=seats,
-                )
-            )
-
+    # Group multi-seat aircraft
+    profiles = _group_multi_seat(aircraft_dirs)
     return profiles
 
 
-def _detect_seats(aircraft_dir: Path) -> list[str]:
-    """Detect crew positions/seats for an aircraft.
+def _group_multi_seat(aircraft_dirs: list[str]) -> list[AircraftProfile]:
+    """Group multi-seat aircraft directories into single profiles with seats."""
+    used: set[str] = set()
+    profiles: list[AircraftProfile] = []
 
-    DCS multi-seat aircraft typically have subdirectories for each seat
-    within the aircraft's input config folder.
-    """
-    seats: list[str] = []
+    # First pass: identify known multi-seat patterns
+    for base_name, suffixes in MULTI_SEAT_PATTERNS.items():
+        seats: list[str] = []
+        seat_dirs: dict[str, str] = {}
+        matched_dirs: list[str] = []
+        for suffix, seat_name in suffixes.items():
+            dir_name = base_name + suffix
+            if dir_name in aircraft_dirs:
+                seats.append(seat_name)
+                seat_dirs[seat_name] = dir_name
+                matched_dirs.append(dir_name)
 
-    # Look for seat-specific subdirectories
-    # Common patterns: direct device dirs at top level (single-seat)
-    # or seat-named subdirs containing device dirs (multi-seat)
-    for item in sorted(aircraft_dir.iterdir()):
-        if not item.is_dir():
+        if seats:
+            used.update(matched_dirs)
+            # Also mark the bare base name as used if it exists
+            if base_name in aircraft_dirs:
+                used.add(base_name)
+            profiles.append(AircraftProfile(
+                name=base_name,
+                display_name=_format_display_name(base_name),
+                seats=seats,
+                seat_dirs=seat_dirs,
+            ))
+
+    # Second pass: remaining directories are single-seat
+    for dir_name in aircraft_dirs:
+        if dir_name in used:
+            continue
+        # Skip if this looks like a variant of an already-matched multi-seat
+        # (e.g., "F-14" when we already have "F-14B")
+        is_variant = False
+        for base_name in MULTI_SEAT_PATTERNS:
+            if dir_name.startswith(base_name) or base_name.startswith(dir_name):
+                is_variant = True
+                break
+        if is_variant:
             continue
 
-        # If this subdirectory itself contains device directories with
-        # joystick bindings, it's likely a seat directory
-        if _is_seat_directory(item):
-            seats.append(item.name)
+        profiles.append(AircraftProfile(
+            name=dir_name,
+            display_name=_format_display_name(dir_name),
+            seats=[],
+        ))
 
-    # If no explicit seat directories found, check if bindings exist
-    # at the top level (single-seat aircraft)
-    if not seats:
-        # Check for device directories directly under aircraft
-        for item in aircraft_dir.iterdir():
-            if item.is_dir() and _has_binding_files(item):
-                # This is a device directory, not a seat directory
-                # Single-seat aircraft
-                return []
-
-    return seats
-
-
-def _is_seat_directory(path: Path) -> bool:
-    """Check if a directory is a seat/role directory (contains device subdirs)."""
-    for item in path.iterdir():
-        if item.is_dir() and _has_binding_files(item):
-            return True
-    return False
-
-
-def _has_joystick_bindings(aircraft_dir: Path) -> bool:
-    """Check if an aircraft directory has any joystick binding files."""
-    # Check direct device directories (single-seat)
-    for item in aircraft_dir.iterdir():
-        if item.is_dir():
-            if _has_binding_files(item):
-                return True
-            # Check for seat subdirectories
-            for sub in item.iterdir():
-                if sub.is_dir() and _has_binding_files(sub):
-                    return True
-    return False
-
-
-def _has_binding_files(device_dir: Path) -> bool:
-    """Check if a device directory contains binding Lua files."""
-    # DCS stores bindings as .lua files in device directories
-    for ext in ("*.lua", "*.diff.lua"):
-        if list(device_dir.glob(ext)):
-            return True
-    # Also check in a 'joystick' subdirectory
-    joystick_dir = device_dir / "joystick"
-    if joystick_dir.exists():
-        for ext in ("*.lua", "*.diff.lua"):
-            if list(joystick_dir.glob(ext)):
-                return True
-    return False
+    return sorted(profiles, key=lambda p: p.name.lower())
 
 
 def _format_display_name(internal_name: str) -> str:
     """Convert DCS internal aircraft name to a display-friendly format."""
-    # Simple cleanup - replace underscores, handle common patterns
     replacements = {
         "FA-18C_hornet": "F/A-18C Hornet",
         "F-16C_50": "F-16C Viper",
         "AH-64D_BLK_II": "AH-64D Apache",
         "F-14B": "F-14B Tomcat",
         "Ka-50_3": "Ka-50 Black Shark",
+        "Ka-50 III": "Ka-50 III Black Shark",
         "Mi-24P": "Mi-24P Hind",
         "UH-1H": "UH-1H Huey",
         "A-10C_2": "A-10C II Warthog",
+        "A-10C II": "A-10C II Warthog",
         "SA342": "SA342 Gazelle",
     }
-    # Try exact match first
     if internal_name in replacements:
         return replacements[internal_name]
-    # Try prefix match
     for key, val in replacements.items():
         if internal_name.startswith(key):
             return val
-    # Fallback: just return the internal name
     return internal_name
 
 
 def prompt_aircraft_selection(profiles: list[AircraftProfile]) -> list[AircraftProfile]:
-    """Display aircraft list and prompt user for selection.
-
-    Returns the selected AircraftProfile objects.
-    """
+    """Display aircraft list and prompt user for selection."""
     import click
 
     click.echo()
@@ -154,7 +137,7 @@ def prompt_aircraft_selection(profiles: list[AircraftProfile]) -> list[AircraftP
     click.echo()
 
     for i, profile in enumerate(profiles, 1):
-        seat_info = f"({profile.seat_count} seat{'s' if profile.is_multi_seat else ''})"
+        seat_info = f"({profile.seat_count} seat)"
         if profile.is_multi_seat:
             seat_info = f"({profile.seat_count} seats: {', '.join(profile.seats)})"
         click.echo(f"     {i:2d}.  {profile.name:<22s} {seat_info}")

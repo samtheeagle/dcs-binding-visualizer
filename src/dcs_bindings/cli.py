@@ -10,7 +10,7 @@ import click
 from . import __version__
 from .aircraft_scanner import prompt_aircraft_selection, scan_aircraft
 from .config import DEFAULT_CONFIG_FILENAME, AppConfig, load_config, save_config
-from .detection_cache import get_cached_markers, save_markers_to_cache
+from .detection_cache import get_cached_markers, save_markers_to_cache, set_cache_dir
 from .detector import detect_markers, generate_debug_image
 from .lua_parser import parse_bindings_for_aircraft
 from .mapping import load_device_mapping, resolve_button_positions
@@ -225,6 +225,9 @@ def _ensure_config(state: State) -> Optional[AppConfig]:
             click.echo(f"Error: No config file found: {state.config_path}", err=True)
             return None
         config = run_wizard(state.config_path)
+    # Set cache dir relative to config file location
+    config_dir = Path(state.config_path).resolve().parent
+    set_cache_dir(config_dir / ".cache")
     return config
 
 
@@ -294,6 +297,12 @@ def _create_render_jobs(
         seats = profile.seats if profile.is_multi_seat else [None]
 
         for seat in seats:
+            # Resolve the actual directory name for this seat
+            if seat and seat in profile.seat_dirs:
+                aircraft_dir_name = profile.seat_dirs[seat]
+            else:
+                aircraft_dir_name = profile.name
+
             # Collect bindings from all devices
             all_bindings: dict[str, object] = {}
 
@@ -301,10 +310,9 @@ def _create_render_jobs(
                 mapping = data["mapping"]
                 bindings = parse_bindings_for_aircraft(
                     config.input_config_path,
-                    profile.name,
+                    aircraft_dir_name,
                     mapping.device_name,
                     mapping.device_name_alt,
-                    seat=seat,
                 )
                 all_bindings.update(bindings)
 

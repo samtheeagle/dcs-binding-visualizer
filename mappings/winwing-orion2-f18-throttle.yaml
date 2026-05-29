@@ -23,7 +23,7 @@
 #   - SimulatorHardware.com specification (80 buttons, 6 axes confirmed)
 
 device_name: "WINWING Orion Throttle Base II + F18 HANDLE"
-device_name_alt: "WINCTRL Orion Throttle Base II + F18 HANDLE"
+device_name_alt: "Winwing WINCTRL Orion Throttle Base II + F18 HANDLE"
 description: "WinWing Orion 2 Throttle with F/A-18 Handles (80 buttons, 6 axes)"
 
 # Axes provided by the throttle (6 total)
@@ -207,12 +207,8 @@ mappings:
   79: "JOY_BTN79"          # Throttle Lock Left
   80: "JOY_BTN80"          # Throttle Lock Right
 
-# Optional: Linux-specific overrides
-# On Linux (via HID driver), this device uses all 80 buttons which is
-# exactly the kernel HID limit. All buttons should be accessible.
-# Use 'evtest' or 'jstest' to verify your actual Linux button IDs.
-#
+# Linux-specific overrides
+# TODO: Populate with actual Linux button IDs from jstest/evtest.
+# The throttle button numbering on Linux does NOT match Windows.
 # linux_overrides:
-#   1: "JOY_BTN1"
-#   2: "JOY_BTN2"
-#   # ... adjust based on evtest output on your system
+

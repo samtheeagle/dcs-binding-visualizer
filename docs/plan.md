@@ -244,14 +244,14 @@ output:
 ### 2. DCS Lua Config Parser
 
 - Parse DCS input binding files located at:
-  `<saved_games_dir>/Config/Input/<aircraft>/<device_name>/joystick/`
+  `<saved_games_dir>/Config/Input/<aircraft>/joystick/<device_name> {GUID}.diff.lua`
 - Files are Lua tables (not full Lua scripts) — use a lightweight Lua table parser
 - Extract: button/hat/axis assignments, binding display names, modifier keys
-- Handle both `default.lua` (defaults) and user-overridden profiles
+- Handle user-overridden profiles (`.diff.lua` files containing `keyDiffs` with `added`/`removed` entries)
 
 **Multi-seat aircraft detection:**
 
-Some aircraft have multiple crew positions with independent binding sets. DCS organizes these as separate subdirectories or profile sets within the aircraft's input config folder. Examples:
+Some aircraft have multiple crew positions with independent binding sets. DCS organizes these as **separate top-level directories** with seat/role suffixes. Examples:
 
 | Aircraft | Seats |
 |----------|-------|
@@ -262,12 +262,12 @@ Some aircraft have multiple crew positions with independent binding sets. DCS or
 | UH-1H Huey | Pilot, Gunner |
 
 The parser must:
-1. **Detect seat/role directories** within each aircraft's config path (e.g., subdirectories or naming conventions that indicate separate crew positions)
-2. **Enumerate all seats** for a given aircraft automatically
+1. **Detect seat/role directories** by recognising known naming patterns in top-level directory names (e.g., `AH-64D_BLK_II_PLT`, `Mi-24P_pilot`, `F-14B-RIO`)
+2. **Group related directories** into a single aircraft profile with multiple seats
 3. **Parse bindings per seat** — each seat produces its own independent binding set
-4. **Generate separate output images per seat** — named clearly (e.g., `AH-64D_Pilot.png`, `AH-64D_CPG.png`)
+4. **Generate separate output images per seat** — named clearly (e.g., `AH-64D_BLK_II_Pilot.png`, `AH-64D_BLK_II_CPG.png`)
 
-The tool should auto-discover seats without requiring manual configuration. Single-seat aircraft simply produce one image as normal.
+Seat discovery uses a known-patterns dictionary mapping base aircraft names to their seat suffixes. This is a pragmatic choice given the inconsistent naming conventions DCS uses across modules (e.g., `_PLT` vs `_pilot` vs `-Pilot`). New multi-seat modules require adding an entry to the patterns dictionary. Single-seat aircraft simply produce one image as normal.
 
 **Candidate libraries:**
 - `lupa` (Lua interpreter in Python)
@@ -472,7 +472,7 @@ The user never specifies (x, y) positions. All button positions are determined a
 ```yaml
 # mappings/winwing-orion2-f16ex-stick.yaml
 device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-device_name_alt: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name_alt: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
 
 # Maps the NUMBER visible in the image circle → DCS button ID
 # The (x, y) position is auto-detected from the image — not specified here
@@ -486,11 +486,12 @@ mappings:
 
 # Optional: Linux-specific overrides (same format, different IDs)
 linux_overrides:
-  1: "JOY_BTN3"   # Linux driver remaps btn1 → btn3
-  2: "JOY_BTN1"
+  1: "JOY_BTN1"
+  2: "JOY_BTN2"
+  # ... on Linux, button numbers typically match the device manual numbering
 ```
 
-**Device-to-DCS matching:** When the tool searches for bindings, it scans the device directories under `Config/Input/<aircraft>/` and matches against the `device_name` (and `device_name_alt`) field using **substring matching**. DCS device folder names include a GUID suffix (e.g., `WINWING Orion Joystick Base 2 + JGRIP-F16 {E1324450-...}`), so the tool matches if the folder name **starts with** the `device_name` string. If no match is found for a device, the tool logs a warning and skips that device for that aircraft (the other device will still render with its bindings).
+**Device-to-DCS matching:** When the tool searches for bindings, it scans the **filenames** in `Config/Input/<aircraft>/joystick/` and matches against the `device_name` (and `device_name_alt`) field using **starts-with matching**. DCS device filenames include a GUID suffix (e.g., `Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16 {9E573ED2-...}.diff.lua`), so the tool matches if the filename **starts with** the `device_name` string. If no match is found for a device, the tool logs a warning and skips that device for that aircraft (the other device will still render with its bindings).
 
 This handles the Linux driver reordering problem. The user maintains one mapping file per device that only defines number-to-ID relationships — the tool handles all spatial/position detection automatically from the image.
 
@@ -935,12 +936,12 @@ dcs-binding-visualizer/
 ## Open Considerations
 
 - **Multi-page**: If a device has many bindings and labels become too crowded on A4, consider overflow to a second page or scaling adjustments.
-- **Seat discovery heuristics**: The DCS directory structure for multi-seat aircraft may vary across modules. The parser should handle known patterns (e.g., subdirectories named by role) and gracefully fall back to treating unrecognized structures as single-seat.
+- **Seat discovery heuristics**: DCS uses separate top-level directories with inconsistent naming conventions for multi-seat aircraft (e.g., `_PLT`, `_pilot`, `-Pilot`). The tool uses a known-patterns dictionary to group these. Unrecognised structures are treated as single-seat.
 
 ## Decided Design Details
 
 These were previously open considerations and have now been resolved:
 
-- **DCS device naming & matching**: The mapping file `device_name` field is matched against DCS device directories using **starts-with substring matching** (ignoring GUID suffixes). Both `device_name` and `device_name_alt` are tried. If no match is found, the device is skipped with a warning.
+- **DCS device naming & matching**: The mapping file `device_name` field is matched against DCS **filenames** in `<aircraft>/joystick/` using **starts-with matching** (ignoring GUID suffixes). Both `device_name` and `device_name_alt` are tried. If no match is found, the device is skipped with a warning.
 - **Hat switches**: Each hat direction gets its **own numbered circle** on the device image. A 4-way hat = 4 circles (e.g., numbered 6, 7, 8, 9 for up/down/left/right). A 5-way hat (4-way + push) = 5 circles. The mapping file maps each to its own DCS button ID (`JOY_BTN_POV1_U`, `JOY_BTN_POV1_D`, etc.). This keeps the system simple and consistent — every bindable input gets one marker.
 - **Binding data freshness**: DCS Lua binding files are always read fresh on every render — never cached. Only image detection (positions) is cached.

@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from .models import Binding
 
@@ -16,10 +16,15 @@ def parse_bindings_for_aircraft(
 ) -> dict[str, Binding]:
     """Parse DCS binding files for a specific aircraft and device.
 
+    DCS structure: <Input>/<aircraft>/joystick/<device_name> {GUID}.diff.lua
+
+    For multi-seat aircraft, DCS uses separate top-level directories with
+    seat suffixes (e.g., AH-64D_BLK_II_PLT, F-14B-Pilot).
+
     Args:
         input_config_path: Path to <saved_games>/Config/Input/
         aircraft_name: DCS aircraft folder name (e.g., "FA-18C_hornet")
-        device_name: Device name to match against folder names
+        device_name: Device name to match against filenames
         device_name_alt: Alternative device name (newer firmware)
         seat: Optional seat name for multi-seat aircraft
 
@@ -31,59 +36,43 @@ def parse_bindings_for_aircraft(
     if not aircraft_dir.exists():
         return {}
 
-    # Determine the search path based on seat
-    if seat:
-        search_dir = aircraft_dir / seat
-        if not search_dir.exists():
-            search_dir = aircraft_dir
-    else:
-        search_dir = aircraft_dir
-
-    # Find the device directory matching our device_name
-    device_dir = _find_device_directory(search_dir, device_name, device_name_alt)
-    if not device_dir:
+    # Look for the joystick subdirectory
+    joystick_dir = aircraft_dir / "joystick"
+    if not joystick_dir.exists():
         return {}
 
-    # Parse all lua files in the device directory
-    bindings: dict[str, Binding] = {}
-    lua_files = list(device_dir.glob("*.lua"))
+    # Find the .diff.lua file matching our device name
+    lua_file = _find_device_file(joystick_dir, device_name, device_name_alt)
+    if not lua_file:
+        return {}
 
-    # Also check joystick subdirectory
-    joystick_dir = device_dir / "joystick"
-    if joystick_dir.exists():
-        lua_files.extend(joystick_dir.glob("*.lua"))
-
-    for lua_file in lua_files:
-        try:
-            file_bindings = _parse_lua_binding_file(lua_file)
-            bindings.update(file_bindings)
-        except Exception:
-            # Skip files that can't be parsed
-            continue
-
-    return bindings
+    try:
+        return _parse_lua_binding_file(lua_file)
+    except Exception:
+        return {}
 
 
-def _find_device_directory(
-    search_dir: Path, device_name: str, device_name_alt: str = ""
+def _find_device_file(
+    joystick_dir: Path, device_name: str, device_name_alt: str = ""
 ) -> Optional[Path]:
-    """Find a device directory matching the device name (starts-with matching).
+    """Find a .diff.lua file matching the device name (starts-with matching).
 
-    DCS device directories include a GUID suffix, so we match on prefix.
+    DCS filenames include a GUID suffix, e.g.:
+    'Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16 {GUID}.diff.lua'
     """
-    if not search_dir.exists():
+    if not joystick_dir.exists():
         return None
 
     names_to_match = [device_name.lower()]
     if device_name_alt:
         names_to_match.append(device_name_alt.lower())
 
-    for item in search_dir.iterdir():
-        if not item.is_dir():
+    for item in joystick_dir.iterdir():
+        if not item.is_file() or not item.name.endswith(".lua"):
             continue
-        folder_lower = item.name.lower()
+        filename_lower = item.name.lower()
         for name in names_to_match:
-            if folder_lower.startswith(name.lower()):
+            if filename_lower.startswith(name.lower()):
                 return item
 
     return None
@@ -92,13 +81,14 @@ def _find_device_directory(
 def _parse_lua_binding_file(lua_file: Path) -> dict[str, Binding]:
     """Parse a single DCS Lua binding file.
 
-    DCS binding files are Lua tables with a specific structure.
-    We use regex-based parsing to extract key-value assignments.
+    DCS diff.lua files have the structure:
+        local diff = { ["keyDiffs"] = { ["id"] = { ["added"] = { [1] = { ["key"] = "JOY_BTN1" } }, ["name"] = "Action" } } }
+        return diff
     """
     content = lua_file.read_text(encoding="utf-8", errors="ignore")
     bindings: dict[str, Binding] = {}
 
-    # Try to parse using slpp first
+    # Try slpp first
     try:
         return _parse_with_slpp(content)
     except Exception:
@@ -118,16 +108,10 @@ def _parse_with_slpp(content: str) -> dict[str, Binding]:
 
     bindings: dict[str, Binding] = {}
 
-    # Extract the diff/keyDiffs table
-    # DCS files typically have: local diff = { ... } return diff
-    # or contain keyDiffs tables
-    table_match = re.search(
-        r"(?:local\s+diff\s*=\s*|return\s+)(\{.*\})", content, re.DOTALL
-    )
+    # Strip 'local diff = ' prefix and 'return diff' suffix
+    table_match = re.search(r"local\s+diff\s*=\s*(\{.*\})", content, re.DOTALL)
     if not table_match:
-        # Try to find just a table
         table_match = re.search(r"(\{.*\})", content, re.DOTALL)
-
     if not table_match:
         return bindings
 
@@ -139,86 +123,79 @@ def _parse_with_slpp(content: str) -> dict[str, Binding]:
     if not isinstance(data, dict):
         return bindings
 
-    # Extract bindings from the parsed structure
-    _extract_bindings_from_dict(data, bindings)
+    # Extract from keyDiffs structure
+    key_diffs = data.get("keyDiffs", {})
+    if isinstance(key_diffs, dict):
+        for action_id, entry in key_diffs.items():
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name", "")
+            added = entry.get("added", {})
+            if isinstance(added, dict):
+                for idx, binding_entry in added.items():
+                    if isinstance(binding_entry, dict):
+                        key = binding_entry.get("key", "")
+                        if key.startswith("JOY_BTN"):
+                            reformers = binding_entry.get("reformers", [])
+                            modifiers = []
+                            if isinstance(reformers, list):
+                                modifiers = [str(r) for r in reformers]
+                            bindings[key] = Binding(
+                                button_id=key,
+                                action_name=name,
+                                modifiers=modifiers,
+                            )
 
     return bindings
 
 
 def _parse_with_regex(content: str) -> dict[str, Binding]:
-    """Fallback regex-based parser for DCS Lua binding files."""
+    """Fallback regex-based parser for DCS Lua diff files.
+
+    Extracts ["name"] and ["key"] pairs from keyDiffs entries.
+    """
     bindings: dict[str, Binding] = {}
 
-    # Pattern for key assignments in DCS diff files:
-    # ["dXXX"] = { ... ["key"] = "JOY_BTNXX", ["name"] = "Action Name" ... }
-    # or ["keyDiffs"]["dXXX"]["added"]["1"]["key"] = "JOY_BTN1"
-    pattern = re.compile(
-        r'\["key"\]\s*=\s*"(JOY_BTN[^"]*)".*?'
-        r'\["name"\]\s*=\s*"([^"]*)"',
-        re.DOTALL,
+    # Match keyDiffs entries: blocks containing "name" and "added" with "key"
+    # Pattern: find each entry in keyDiffs that has a name and a JOY_BTN key
+    entry_pattern = re.compile(
+        r'\["name"\]\s*=\s*"([^"]*)"', re.DOTALL
+    )
+    key_pattern = re.compile(
+        r'\["key"\]\s*=\s*"(JOY_BTN[^"]*)"'
     )
 
-    # Also try reversed order (name before key)
-    pattern_alt = re.compile(
-        r'\["name"\]\s*=\s*"([^"]*)".*?'
-        r'\["key"\]\s*=\s*"(JOY_BTN[^"]*)"',
-        re.DOTALL,
-    )
+    # Split content into keyDiffs entries by looking for the entry ID pattern
+    in_key_diffs = False
+    current_block = ""
+    brace_depth = 0
 
-    for match in pattern.finditer(content):
-        button_id = match.group(1)
-        action_name = match.group(2)
-        bindings[button_id] = Binding(button_id=button_id, action_name=action_name)
+    for line in content.split("\n"):
+        if '["keyDiffs"]' in line:
+            in_key_diffs = True
+            continue
+        if not in_key_diffs:
+            continue
 
-    for match in pattern_alt.finditer(content):
-        action_name = match.group(1)
-        button_id = match.group(2)
-        if button_id not in bindings:
-            bindings[button_id] = Binding(
-                button_id=button_id, action_name=action_name
-            )
+        # Track brace depth to isolate individual entries
+        for ch in line:
+            if ch == "{":
+                brace_depth += 1
+            elif ch == "}":
+                brace_depth -= 1
 
-    # Also look for simpler patterns
-    simple_pattern = re.compile(
-        r'"(JOY_BTN\w+)"[^}]*?"name"\s*[:=]\s*"([^"]+)"', re.DOTALL
-    )
-    for match in simple_pattern.finditer(content):
-        button_id = match.group(1)
-        action_name = match.group(2)
-        if button_id not in bindings:
-            bindings[button_id] = Binding(
-                button_id=button_id, action_name=action_name
-            )
+        current_block += line + "\n"
+
+        # When we close back to depth 2, we've completed one entry
+        if brace_depth <= 2 and current_block.strip():
+            name_match = entry_pattern.search(current_block)
+            key_match = key_pattern.search(current_block)
+            if name_match and key_match:
+                action_name = name_match.group(1)
+                button_id = key_match.group(1)
+                bindings[button_id] = Binding(
+                    button_id=button_id, action_name=action_name
+                )
+            current_block = ""
 
     return bindings
-
-
-def _extract_bindings_from_dict(
-    data: dict[str, Any], bindings: dict[str, Binding], depth: int = 0
-) -> None:
-    """Recursively extract bindings from a parsed Lua table."""
-    if depth > 10:
-        return
-
-    # Check if this dict has key + name (a binding entry)
-    if "key" in data and "name" in data:
-        key = str(data["key"])
-        if key.startswith("JOY_BTN"):
-            name = str(data["name"])
-            reformers = data.get("reformers", [])
-            modifiers = []
-            if reformers and isinstance(reformers, list):
-                modifiers = [str(r) for r in reformers]
-            bindings[key] = Binding(
-                button_id=key, action_name=name, modifiers=modifiers
-            )
-        return
-
-    # Recurse into sub-dicts
-    for value in data.values():
-        if isinstance(value, dict):
-            _extract_bindings_from_dict(value, bindings, depth + 1)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    _extract_bindings_from_dict(item, bindings, depth + 1)

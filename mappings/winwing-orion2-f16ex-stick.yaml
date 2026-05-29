@@ -1,128 +1,107 @@
 # WinWing Orion 2 EX — F-16EX Stick Grip (with EX expansion kit)
-# Default button mapping (Windows DCS button IDs)
 #
-# DCS Device Name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-# (newer firmware: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16")
-#
-# The F-16EX grip replicates the real F-16 sidestick controller with an
-# additional EX expansion bolt-on on the left side adding extra controls.
-#
-# Base grip controls:
-#   - 5 x 4-way + push hat switches (TMS, DMS, CMS, Trim, Expand)
-#   - 11 buttons (trigger stages, paddle, pinky, etc.)
-#   - 1 mini-joystick (analog)
-#   - 2-stage programmable trigger
-#
-# EX expansion adds:
-#   - 1 x 4-way + push directional switch (Castle hat)
-#   - 1 x mini-joystick with push (Slew)
-#   - 1 x 2-stage trigger (secondary / lower trigger)
-#
-# Note: Your image should have numbered circles at each button/hat/switch location.
-# The numbers in this file (1, 2, 3...) correspond to the circled numbers on YOUR image.
-#
-# Sources:
-#   - WinWing SimAppPro button testing
-#   - BoostedMedia F16EX grip review (specifications)
-#   - DCS World controller configuration
-#   - Community maps from digitalcombatsimulator.com
+# Maps image circle number -> device button ID.
+# Image numbers correspond to the WinWing manual button numbering.
 
 device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-device_name_alt: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name_alt: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
 description: "WinWing Orion 2 EX with F-16EX Stick Grip (incl. EX expansion)"
 
-# Axes provided by the joystick base + grip
 axes:
   - id: "JOY_X"
-    description: "Stick Roll (Left/Right)"
+    description: "Stick Roll"
   - id: "JOY_Y"
-    description: "Stick Pitch (Forward/Back)"
+    description: "Stick Pitch"
   - id: "JOY_RX"
-    description: "Mini-joystick X (Cursor/Slew horizontal)"
+    description: "Mini-joystick X"
   - id: "JOY_RY"
-    description: "Mini-joystick Y (Cursor/Slew vertical)"
+    description: "Mini-joystick Y"
 
-# Maps the NUMBER visible in the image circle -> DCS button ID
-# The (x, y) position is auto-detected from the image -- not specified here.
+# Windows button IDs (used when DCS runs natively on Windows)
 mappings:
-  # --- Primary Trigger (index finger, front of grip) ---
-  1: "JOY_BTN1"            # Trigger - First Detent (half press)
-  2: "JOY_BTN6"            # Trigger - Second Detent (full press / Weapon Release)
+  1: "JOY_BTN1"
+  2: "JOY_BTN6"
+  3: "JOY_BTN2"
+  4: "JOY_BTN3"
+  5: "JOY_BTN4"
+  6: "JOY_BTN_POV1_U"
+  7: "JOY_BTN_POV1_D"
+  8: "JOY_BTN_POV1_L"
+  9: "JOY_BTN_POV1_R"
+  10: "JOY_BTN7"
+  11: "JOY_BTN_POV2_U"
+  12: "JOY_BTN_POV2_D"
+  13: "JOY_BTN_POV2_L"
+  14: "JOY_BTN_POV2_R"
+  15: "JOY_BTN8"
+  16: "JOY_BTN_POV3_U"
+  17: "JOY_BTN_POV3_D"
+  18: "JOY_BTN_POV3_L"
+  19: "JOY_BTN_POV3_R"
+  20: "JOY_BTN9"
+  21: "JOY_BTN_POV4_U"
+  22: "JOY_BTN_POV4_D"
+  23: "JOY_BTN_POV4_L"
+  24: "JOY_BTN_POV4_R"
+  25: "JOY_BTN10"
+  26: "JOY_BTN11"
+  27: "JOY_BTN12"
+  28: "JOY_BTN13"
+  29: "JOY_BTN14"
+  30: "JOY_BTN15"
+  31: "JOY_BTN5"
+  32: "JOY_BTN16"
+  33: "JOY_BTN17"
+  34: "JOY_BTN18"
+  35: "JOY_BTN19"
+  36: "JOY_BTN20"
+  37: "JOY_BTN21"
+  38: "JOY_BTN22"
+  39: "JOY_BTN23"
 
-  # --- Weapon Release / Pickle Button ---
-  3: "JOY_BTN2"            # Pickle Button (red, top of grip)
-
-  # --- Paddle Switch (rear/back of grip, A/P Disconnect) ---
-  4: "JOY_BTN3"            # Paddle Switch (A/P Disconnect / NWS)
-
-  # --- Pinky Switch ---
-  5: "JOY_BTN4"            # Pinky Switch (bottom rear)
-
-  # --- TMS (Target Management Switch) - 4-way + push ---
-  6: "JOY_BTN_POV1_U"     # TMS - Up (Forward)
-  7: "JOY_BTN_POV1_D"     # TMS - Down (Aft)
-  8: "JOY_BTN_POV1_L"     # TMS - Left
-  9: "JOY_BTN_POV1_R"     # TMS - Right
-  10: "JOY_BTN7"           # TMS - Push (Depress)
-
-  # --- DMS (Display Management Switch) - 4-way + push ---
-  11: "JOY_BTN_POV2_U"    # DMS - Up (Forward)
-  12: "JOY_BTN_POV2_D"    # DMS - Down (Aft)
-  13: "JOY_BTN_POV2_L"    # DMS - Left
-  14: "JOY_BTN_POV2_R"    # DMS - Right
-  15: "JOY_BTN8"           # DMS - Push (Depress)
-
-  # --- CMS (Countermeasure Management Switch) - 4-way + push ---
-  16: "JOY_BTN_POV3_U"    # CMS - Up (Forward)
-  17: "JOY_BTN_POV3_D"    # CMS - Down (Aft)
-  18: "JOY_BTN_POV3_L"    # CMS - Left
-  19: "JOY_BTN_POV3_R"    # CMS - Right
-  20: "JOY_BTN9"           # CMS - Push (Depress)
-
-  # --- Trim Hat - 4-way + push ---
-  21: "JOY_BTN_POV4_U"    # Trim Hat - Up (Nose Down)
-  22: "JOY_BTN_POV4_D"    # Trim Hat - Down (Nose Up)
-  23: "JOY_BTN_POV4_L"    # Trim Hat - Left (Left Wing Down)
-  24: "JOY_BTN_POV4_R"    # Trim Hat - Right (Right Wing Down)
-  25: "JOY_BTN10"          # Trim Hat - Push (Depress)
-
-  # --- Expand Hat (5th hat on base grip) - 4-way + push ---
-  26: "JOY_BTN11"          # Expand Hat - Up (Forward)
-  27: "JOY_BTN12"          # Expand Hat - Down (Aft)
-  28: "JOY_BTN13"          # Expand Hat - Left
-  29: "JOY_BTN14"          # Expand Hat - Right
-  30: "JOY_BTN15"          # Expand Hat - Push (Depress)
-
-  # --- Mini-Joystick Push (Cursor Enable/Depress) ---
-  31: "JOY_BTN5"           # Mini-Joystick Push (Cursor Enable)
-
-  # === EX EXPANSION KIT (bolt-on, left side of grip) ===
-
-  # --- Castle Hat (EX) - 4-way + push ---
-  32: "JOY_BTN16"          # Castle Hat - Up (Forward)
-  33: "JOY_BTN17"          # Castle Hat - Down (Aft)
-  34: "JOY_BTN18"          # Castle Hat - Left
-  35: "JOY_BTN19"          # Castle Hat - Right
-  36: "JOY_BTN20"          # Castle Hat - Push (Depress)
-
-  # --- Slew Mini-Joystick (EX) - Push ---
-  37: "JOY_BTN21"          # EX Slew Mini-Joystick Push (Depress)
-
-  # --- Secondary Trigger (EX, lower/left trigger) ---
-  38: "JOY_BTN22"          # EX Trigger - First Detent
-  39: "JOY_BTN23"          # EX Trigger - Second Detent
-
-# Note: The EX mini-joystick analog axes may appear as additional JOY_RX/RY
-# or as separate axis IDs depending on SimAppPro configuration.
-
-# Optional: Linux-specific overrides
-# On Linux, the HID driver may remap button numbers differently.
-# The kernel has an 80-button limit per HID device.
-# The F-16EX grip + base combined is within this limit (~39 buttons).
-# Use 'jstest' or 'evtest' on your system to determine actual Linux button numbers.
-#
-# linux_overrides:
-#   1: "JOY_BTN1"
-#   2: "JOY_BTN6"
-#   3: "JOY_BTN2"
-#   # ... etc - run 'evtest /dev/input/eventXX' to discover your mapping
+# Linux button IDs (used when DCS runs via Proton/Wine)
+# On Linux the button numbers match the WinWing manual numbering.
+# The trim hat reports as a POV axis rather than buttons.
+linux_overrides:
+  1: "JOY_BTN1"
+  2: "JOY_BTN2"
+  3: "JOY_BTN3"
+  4: "JOY_BTN4"
+  5: "JOY_BTN5"
+  6: "JOY_BTN6"
+  7: "JOY_BTN7"
+  8: "JOY_BTN8"
+  9: "JOY_BTN9"
+  10: "JOY_BTN10"
+  11: "JOY_BTN11"
+  12: "JOY_BTN12"
+  13: "JOY_BTN13"
+  14: "JOY_BTN14"
+  15: "JOY_BTN15"
+  16: "JOY_BTN16"
+  17: "JOY_BTN17"
+  18: "JOY_BTN18"
+  19: "JOY_BTN19"
+  20: "JOY_BTN20"
+  21: "JOY_BTN21"
+  22: "JOY_BTN22"
+  23: "JOY_BTN23"
+  24: "JOY_BTN24"
+  25: "JOY_BTN25"
+  26: "JOY_BTN26"
+  27: "JOY_BTN27"
+  28: "JOY_BTN28"
+  29: "JOY_BTN29"
+  30: "JOY_BTN30"
+  31: "JOY_BTN31"
+  32: "JOY_BTN32"
+  33: "JOY_BTN33"
+  34: "JOY_BTN34"
+  35: "JOY_BTN35"
+  36: "JOY_BTN36"
+  37: "JOY_BTN37"
+  38: "JOY_BTN38"
+  39: "JOY_BTN39"
+  40: "JOY_BTN40"
+  41: "JOY_BTN41"
+  42: "JOY_BTN42"

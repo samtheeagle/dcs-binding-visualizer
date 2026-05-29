@@ -107,6 +107,7 @@ class AircraftProfile:
     name: str  # DCS internal name, e.g., "FA-18C_hornet"
     display_name: str = ""
     seats: list[str] = field(default_factory=list)  # e.g., ["Pilot", "CPG"]
+    seat_dirs: dict[str, str] = field(default_factory=dict)  # seat_name -> actual dir name
 
     @property
     def is_multi_seat(self) -> bool:

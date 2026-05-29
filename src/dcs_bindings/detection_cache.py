@@ -9,7 +9,14 @@ import yaml
 
 from .models import DetectedMarker
 
-CACHE_DIR = Path(".cache")
+# Resolved at module level; can be overridden via set_cache_dir()
+_cache_dir: Path = Path(".cache")
+
+
+def set_cache_dir(path: Path) -> None:
+    """Set the cache directory (call with config file's parent directory / .cache)."""
+    global _cache_dir
+    _cache_dir = path
 
 
 def get_cached_markers(image_path: str) -> Optional[list[DetectedMarker]]:
@@ -60,7 +67,7 @@ def save_markers_to_cache(
         markers: Detected markers to cache
         marker_colour: The marker colour used for detection
     """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = _get_cache_path(image_path)
 
     data = {
@@ -95,7 +102,7 @@ def _get_cache_path(image_path: str) -> Path:
     """Get the cache file path for a given image."""
     # Use image filename (without extension) + _positions.yaml
     image_name = Path(image_path).stem
-    return CACHE_DIR / f"{image_name}_positions.yaml"
+    return _cache_dir / f"{image_name}_positions.yaml"
 
 
 def _compute_image_hash(image_path: str) -> str:
