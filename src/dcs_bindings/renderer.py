@@ -516,30 +516,196 @@ def render_binding_svg(
     lines.append(f'  <image href="data:{mime};base64,{img_b64}" width="{svg_w}" height="{svg_h}"/>')
 
     font_size = 14
+    line_h = font_size + 2
+    char_w = font_size * 0.6
+    pad = 8
+
+    # Compute bounding box for a hat group label given anchor (cx, cy = top-left of first row text baseline)
+    def _hat_group_bbox(btn, cx, cy):
+        text_lines = btn["text"].split("\n")
+        middle_parts = text_lines[2].split("\t")
+        cell_h = line_h
+        if len(middle_parts) == 3:
+            col_widths = [len(middle_parts[i]) * char_w + pad for i in range(3)]
+        elif len(middle_parts) == 2:
+            col_widths = [len(middle_parts[0]) * char_w + pad, pad, len(middle_parts[1]) * char_w + pad]
+        else:
+            col_widths = [len(text_lines[2]) * char_w + pad, 0, 0]
+        top_row_w = max(len(text_lines[0]), len(text_lines[1]), len(text_lines[3])) * char_w + pad
+        table_w = max(sum(col_widths), top_row_w)
+        table_h = cell_h * 4
+        # bbox: (x, y, w, h) where x,y is top-left
+        return (cx - table_w / 2, cy - font_size, table_w, table_h)
+
+    def _rects_intersect(r1, r2):
+        x1, y1, w1, h1 = r1
+        x2, y2, w2, h2 = r2
+        return not (x1 + w1 <= x2 or x2 + w2 <= x1 or y1 + h1 <= y2 or y2 + h2 <= y1)
+
+    def _out_of_bounds(rect, img_w, img_h):
+        x, y, w, h = rect
+        return x < 0 or y < 0 or x + w > img_w or y + h > img_h
+
+    # Load image for background sampling
+    import cv2
+    import numpy as np
+    _bg_img = cv2.imread(str(image_path))
+    _bg_gray = cv2.cvtColor(_bg_img, cv2.COLOR_BGR2GRAY) if _bg_img is not None else None
+
+    def _non_white_ratio(rect):
+        """Sample the image under rect and return ratio of non-white pixels."""
+        if _bg_gray is None:
+            return 0.0
+        x, y, w, h = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
+        x = max(0, x)
+        y = max(0, y)
+        x2 = min(x + w, _bg_gray.shape[1])
+        y2 = min(y + h, _bg_gray.shape[0])
+        if x2 <= x or y2 <= y:
+            return 0.0
+        region = _bg_gray[y:y2, x:x2]
+        non_white = np.count_nonzero(region < 240)
+        total = region.size
+        return non_white / total if total > 0 else 0.0
+
+    def _count_collisions(rect, placed_rects, img_w, img_h):
+        count = 0
+        if _out_of_bounds(rect, img_w, img_h):
+            count += 100  # heavy penalty for out of bounds
+        for pr in placed_rects:
+            if _rects_intersect(rect, pr):
+                count += 10
+        # Add non-white pixel ratio as a fractional score
+        count += _non_white_ratio(rect) * 5
+        return count
+
+    # Placement offsets for 8 positions around group center
+    # 12, 3, 6, 9, then 1:30, 4:30, 7:30, 10:30
+    group_radius = 65  # group half-spread (~44px) + marker radius (17px) + gap (4px)
+    def _candidate_positions(btn):
+        """Return list of (cx, cy) for the label anchor at 8 clock positions."""
+        gx, gy = btn["x"], btn["y"]
+        text_lines = btn["text"].split("\n")
+        middle_parts = text_lines[2].split("\t")
+        cell_h = line_h
+        if len(middle_parts) == 3:
+            col_widths = [len(middle_parts[i]) * char_w + pad for i in range(3)]
+        elif len(middle_parts) == 2:
+            col_widths = [len(middle_parts[0]) * char_w + pad, pad, len(middle_parts[1]) * char_w + pad]
+        else:
+            col_widths = [len(text_lines[2]) * char_w + pad, 0, 0]
+        top_row_w = max(len(text_lines[0]), len(text_lines[1]), len(text_lines[3])) * char_w + pad
+        table_w = max(sum(col_widths), top_row_w)
+        table_h = cell_h * 4
+
+        r = group_radius
+        # cy is the first tspan y; bbox top = cy - font_size, bbox bottom = cy - font_size + table_h
+        # For 12 o'clock: bbox bottom must be above gy - r, so cy = gy - r - table_h + font_size
+        positions = [
+            (gx, gy - r - table_h + font_size),                # 12: table bottom clears top buttons
+            (gx + r + table_w / 2, gy - table_h / 2 + font_size),  # 3: centered vertically
+            (gx, gy + r + font_size),                           # 6: table top below bottom buttons
+            (gx - r - table_w / 2, gy - table_h / 2 + font_size),  # 9: centered vertically
+            (gx + r * 0.7 + table_w / 2, gy - r * 0.7 - table_h / 2 + font_size),  # 1:30
+            (gx + r * 0.7 + table_w / 2, gy + r * 0.7 - table_h / 2 + font_size),  # 4:30
+            (gx - r * 0.7 - table_w / 2, gy + r * 0.7 - table_h / 2 + font_size),  # 7:30
+            (gx - r * 0.7 - table_w / 2, gy - r * 0.7 - table_h / 2 + font_size),  # 10:30
+        ]
+        return positions
+
+    # First pass: place hat group labels with collision avoidance
+    # Start with button marker positions as obstacles
+    placed_rects = []
+    for pos in positions:
+        # Each button marker is a circle of ~17px radius
+        placed_rects.append((pos.x - 17, pos.y - 17, 34, 34))
+
+    group_placements = {}  # index -> (cx, cy)
+
+    for i, btn in enumerate(bound_buttons):
+        text_lines = btn["text"].split("\n")
+        if len(text_lines) != 4:
+            continue
+
+        candidates = _candidate_positions(btn)
+        best_pos = candidates[0]
+        best_collisions = float('inf')
+
+        for cx, cy in candidates:
+            bbox = _hat_group_bbox(btn, cx, cy)
+            collisions = _count_collisions(bbox, placed_rects, svg_w, svg_h)
+            if collisions == 0:
+                best_pos = (cx, cy)
+                best_collisions = 0
+                break
+            if collisions < best_collisions:
+                best_collisions = collisions
+                best_pos = (cx, cy)
+
+        group_placements[i] = best_pos
+        placed_rects.append(_hat_group_bbox(btn, best_pos[0], best_pos[1]))
+
+    # Second pass: place single button labels with collision avoidance
+    single_radius = 25  # marker radius (17) + gap (8)
+    single_placements = {}  # index -> (lx, ly)
+
+    for i, btn in enumerate(bound_buttons):
+        text_lines = btn["text"].split("\n")
+        if len(text_lines) != 1:
+            continue
+
+        text = btn["text"]
+        gx, gy = btn["x"], btn["y"]
+        label_w = len(text) * char_w + pad
+        label_h = line_h
+
+        r = single_radius
+        # Candidates: (lx, ly) where lx is center x, ly is text baseline y
+        # bbox: (lx - label_w/2, ly - font_size, label_w, label_h)
+        candidates = [
+            (gx, gy - r - label_h + font_size),                # 12
+            (gx + r + label_w / 2, gy),                         # 3
+            (gx, gy + r + font_size),                           # 6
+            (gx - r - label_w / 2, gy),                         # 9
+            (gx + r * 0.7 + label_w / 2, gy - r * 0.7),        # 1:30
+            (gx + r * 0.7 + label_w / 2, gy + r * 0.7),        # 4:30
+            (gx - r * 0.7 - label_w / 2, gy + r * 0.7),        # 7:30
+            (gx - r * 0.7 - label_w / 2, gy - r * 0.7),        # 10:30
+        ]
+
+        best_pos = candidates[0]
+        best_collisions = float('inf')
+
+        for lx, ly in candidates:
+            bbox = (lx - label_w / 2, ly - font_size, label_w, label_h)
+            collisions = _count_collisions(bbox, placed_rects, svg_w, svg_h)
+            if collisions == 0:
+                best_pos = (lx, ly)
+                best_collisions = 0
+                break
+            if collisions < best_collisions:
+                best_collisions = collisions
+                best_pos = (lx, ly)
+
+        single_placements[i] = best_pos
+        lx, ly = best_pos
+        placed_rects.append((lx - label_w / 2, ly - font_size, label_w, label_h))
 
     # Labels layer
     lines.append(f'  <g id="labels" font-family="DejaVu Sans, sans-serif" font-size="{font_size}">')
-    line_h = font_size + 2
-    for btn in bound_buttons:
-        lx = btn["x"] + 25
-        ly = btn["y"] - 5
+    for i, btn in enumerate(bound_buttons):
         text = btn["text"]
         num = btn.get("image_number", "grp")
         label_id = f"btn-{num}"
         text_lines = text.split("\n")
 
         if len(text_lines) == 1:
-            # Single button label
+            # Single button label, placed by collision avoidance
+            lx, ly = single_placements[i]
             escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            lines.append(f'    <text x="{lx}" y="{ly}" id="{label_id}">{escaped}</text>')
+            lines.append(f'    <text x="{lx}" y="{ly}" id="{label_id}" text-anchor="middle">{escaped}</text>')
         elif len(text_lines) == 4:
-            # Hat group: table layout
-            # Row 0: prefix (full width, centered)
-            # Row 1: up (full width, centered)
-            # Row 2: left | center | right (3 cells)
-            # Row 3: down (full width, centered)
-            cx = lx
-            cy = ly
+            cx, cy = group_placements[i]
             prefix = text_lines[0]
             up = text_lines[1]
             middle_parts = text_lines[2].split("\t")
@@ -548,35 +714,26 @@ def render_binding_svg(
             def esc(s):
                 return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-            # Calculate column widths based on text length
-            char_w = font_size * 0.6
-            pad = 8  # padding per cell
             cell_h = line_h
-
             if len(middle_parts) == 3:
-                col_widths = [len(middle_parts[i]) * char_w + pad for i in range(3)]
+                col_widths = [len(middle_parts[j]) * char_w + pad for j in range(3)]
             elif len(middle_parts) == 2:
                 col_widths = [len(middle_parts[0]) * char_w + pad, pad, len(middle_parts[1]) * char_w + pad]
             else:
                 col_widths = [len(text_lines[2]) * char_w + pad, 0, 0]
 
-            # Full-width rows need to be at least as wide as the 3 columns
             top_row_w = max(len(prefix), len(up), len(down)) * char_w + pad
             table_w = max(sum(col_widths), top_row_w)
-
-            # Scale columns proportionally if top rows are wider
             if sum(col_widths) < table_w:
                 extra = (table_w - sum(col_widths)) / 3
                 col_widths = [w + extra for w in col_widths]
 
             table_x = cx - table_w / 2
-            table_y = cy - font_size
 
             # Text elements
             lines.append(f'    <text id="{label_id}" text-anchor="middle">')
             lines.append(f'      <tspan x="{cx}" y="{cy}">{esc(prefix)}</tspan>')
             lines.append(f'      <tspan x="{cx}" y="{cy + cell_h}">{esc(up)}</tspan>')
-            # Middle row: center text in each column
             left_cx = table_x + col_widths[0] / 2
             mid_cx = table_x + col_widths[0] + col_widths[1] / 2
             right_cx = table_x + col_widths[0] + col_widths[1] + col_widths[2] / 2
@@ -591,6 +748,8 @@ def render_binding_svg(
             lines.append(f'    </text>')
         else:
             # Fallback for other multiline
+            lx = btn["x"]
+            ly = btn["y"] - 20
             lines.append(f'    <text x="{lx}" y="{ly}" id="{label_id}" text-anchor="middle">')
             for idx, tl in enumerate(text_lines):
                 escaped = tl.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
