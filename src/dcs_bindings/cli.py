@@ -122,6 +122,21 @@ def render(state, aircraft, seat, force_detect, output_dir, dry_run):
             left_image, right_image, config,
         )
         _echo(state, f"  ✓ Saved: {path}")
+
+        # Also render SVG for each device (editable in Inkscape)
+        from .renderer import render_binding_svg
+        for position, data in device_data.items():
+            svg_filename = job.aircraft_name
+            if job.seat:
+                svg_filename += f"_{job.seat}"
+            svg_filename += f"_{position}.svg"
+            svg_path = os.path.join(config.output.output_dir, svg_filename)
+            render_binding_svg(
+                job, data["positions"], data["image_path"],
+                job.bindings, config, svg_path,
+            )
+            _echo(state, f"  ✓ Saved: {svg_path}")
+
         rendered += 1
 
     _echo(state, f"\n  Done! {rendered} image{'s' if rendered != 1 else ''} generated.")

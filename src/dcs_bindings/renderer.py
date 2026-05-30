@@ -373,9 +373,9 @@ def _group_hat_buttons(
 
         # Build compact cross layout
         if c:
-            composite = f"{prefix}\n↑ {u}\n← {l}  ● {c}  → {r}\n↓ {d}"
+            composite = f"{prefix}\n↑ {u}\n← {l}\t● {c}\t→ {r}\n↓ {d}"
         else:
-            composite = f"{prefix}\n↑ {u}\n← {l}  →  {r}\n↓ {d}"
+            composite = f"{prefix}\n↑ {u}\n← {l}\t\t→ {r}\n↓ {d}"
 
         result.append({
             "text": composite,
@@ -448,3 +448,160 @@ def _load_font(
         return ImageFont.truetype("DejaVuSans.ttf", size_px)
     except Exception:
         return ImageFont.load_default()
+
+
+def render_binding_svg(
+    job: RenderJob,
+    positions: list[ButtonPosition],
+    image_path: str,
+    bindings: dict[str, Binding],
+    config: AppConfig,
+    output_path: str,
+) -> str:
+    """Render an editable SVG with device image and positioned labels.
+
+    Labels are individual text elements that can be moved in Inkscape.
+    Leader lines connect labels to button group centers.
+    """
+    import base64
+
+    rc = config.rendering
+
+    # Load image to get dimensions
+    try:
+        img = Image.open(image_path)
+        img_w, img_h = img.size
+    except Exception:
+        return output_path
+
+    # SVG canvas matches image size
+    svg_w = img_w
+    svg_h = img_h
+
+    # Embed image as base64
+    with open(image_path, "rb") as f:
+        img_b64 = base64.b64encode(f.read()).decode()
+
+    # Determine image mime type
+    ext = Path(image_path).suffix.lower()
+    mime = "image/png" if ext == ".png" else "image/jpeg"
+
+    # Build label data — use same hat grouping as PNG renderer
+    bound_buttons = []
+    for pos in positions:
+        binding = bindings.get(pos.dcs_button_id)
+        if not binding:
+            continue
+        action_name = _title_case(binding.action_name)
+        bound_buttons.append({
+            "text": action_name,
+            "x": pos.x,
+            "y": pos.y,
+            "image_number": pos.image_number,
+        })
+
+    # Detect hat groups (reuse the same function as PNG renderer)
+    def measure_fn(text):
+        # Simple estimate for SVG (not pixel-perfect but good enough for grouping)
+        lines_list = text.split("\n")
+        max_w = max(len(l) * 8 for l in lines_list)
+        total_h = len(lines_list) * 16
+        return max_w, total_h
+
+    bound_buttons = _group_hat_buttons(bound_buttons, measure_fn)
+
+    # Build SVG
+    lines = []
+    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w}" height="{svg_h}">')
+    lines.append(f'  <image href="data:{mime};base64,{img_b64}" width="{svg_w}" height="{svg_h}"/>')
+
+    font_size = 14
+
+    # Labels layer
+    lines.append(f'  <g id="labels" font-family="DejaVu Sans, sans-serif" font-size="{font_size}">')
+    line_h = font_size + 2
+    for btn in bound_buttons:
+        lx = btn["x"] + 25
+        ly = btn["y"] - 5
+        text = btn["text"]
+        num = btn.get("image_number", "grp")
+        label_id = f"btn-{num}"
+        text_lines = text.split("\n")
+
+        if len(text_lines) == 1:
+            # Single button label
+            escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            lines.append(f'    <text x="{lx}" y="{ly}" id="{label_id}">{escaped}</text>')
+        elif len(text_lines) == 4:
+            # Hat group: table layout
+            # Row 0: prefix (full width, centered)
+            # Row 1: up (full width, centered)
+            # Row 2: left | center | right (3 cells)
+            # Row 3: down (full width, centered)
+            cx = lx
+            cy = ly
+            prefix = text_lines[0]
+            up = text_lines[1]
+            middle_parts = text_lines[2].split("\t")
+            down = text_lines[3]
+
+            def esc(s):
+                return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            # Calculate column widths based on text length
+            char_w = font_size * 0.6
+            pad = 8  # padding per cell
+            cell_h = line_h
+
+            if len(middle_parts) == 3:
+                col_widths = [len(middle_parts[i]) * char_w + pad for i in range(3)]
+            elif len(middle_parts) == 2:
+                col_widths = [len(middle_parts[0]) * char_w + pad, pad, len(middle_parts[1]) * char_w + pad]
+            else:
+                col_widths = [len(text_lines[2]) * char_w + pad, 0, 0]
+
+            # Full-width rows need to be at least as wide as the 3 columns
+            top_row_w = max(len(prefix), len(up), len(down)) * char_w + pad
+            table_w = max(sum(col_widths), top_row_w)
+
+            # Scale columns proportionally if top rows are wider
+            if sum(col_widths) < table_w:
+                extra = (table_w - sum(col_widths)) / 3
+                col_widths = [w + extra for w in col_widths]
+
+            table_x = cx - table_w / 2
+            table_y = cy - font_size
+
+            # Text elements
+            lines.append(f'    <text id="{label_id}" text-anchor="middle">')
+            lines.append(f'      <tspan x="{cx}" y="{cy}">{esc(prefix)}</tspan>')
+            lines.append(f'      <tspan x="{cx}" y="{cy + cell_h}">{esc(up)}</tspan>')
+            # Middle row: center text in each column
+            left_cx = table_x + col_widths[0] / 2
+            mid_cx = table_x + col_widths[0] + col_widths[1] / 2
+            right_cx = table_x + col_widths[0] + col_widths[1] + col_widths[2] / 2
+            if len(middle_parts) == 3:
+                lines.append(f'      <tspan x="{left_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[0])}</tspan>')
+                lines.append(f'      <tspan x="{mid_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[1])}</tspan>')
+                lines.append(f'      <tspan x="{right_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[2])}</tspan>')
+            elif len(middle_parts) == 2:
+                lines.append(f'      <tspan x="{left_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[0])}</tspan>')
+                lines.append(f'      <tspan x="{right_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[1])}</tspan>')
+            lines.append(f'      <tspan x="{cx}" y="{cy + cell_h * 3}">{esc(down)}</tspan>')
+            lines.append(f'    </text>')
+        else:
+            # Fallback for other multiline
+            lines.append(f'    <text x="{lx}" y="{ly}" id="{label_id}" text-anchor="middle">')
+            for idx, tl in enumerate(text_lines):
+                escaped = tl.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                lines.append(f'      <tspan x="{lx}" y="{ly + idx * line_h}">{escaped}</tspan>')
+            lines.append(f'    </text>')
+    lines.append('  </g>')
+
+    lines.append('</svg>')
+
+    svg_content = "\n".join(lines)
+    with open(output_path, "w") as f:
+        f.write(svg_content)
+
+    return output_path
