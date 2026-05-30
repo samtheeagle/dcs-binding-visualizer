@@ -300,6 +300,12 @@ def _group_hat_buttons(
     if len(buttons) < 4:
         return buttons
 
+    def short_name(text):
+        parts = text.replace("\n", " ").split(" - ")
+        if len(parts) > 1:
+            return parts[-1].strip()
+        return text.replace("\n", " ").strip()
+
     used = set()
     result = []
 
@@ -356,13 +362,6 @@ def _group_hat_buttons(
         btn_left = buttons[left_idx] if left_idx is not None else None
         btn_right = buttons[right_idx] if right_idx is not None else None
         btn_center = buttons[center_idx] if center_idx is not None else None
-
-        # Extract short directional names
-        def short_name(text):
-            parts = text.replace("\n", " ").split(" - ")
-            if len(parts) > 1:
-                return parts[-1].strip()
-            return text.replace("\n", " ").strip()
 
         # Get common prefix from any of the directional buttons
         full = btn_up["text"].replace("\n", " ")
@@ -513,6 +512,106 @@ def _load_font(
         return ImageFont.load_default()
 
 
+def _group_by_mapping(buttons: list[dict], groups: list[dict]) -> list[dict]:
+    """Group buttons using explicit group definitions from the mapping file."""
+
+    def short_name(text):
+        parts = text.replace("\n", " ").split(" - ")
+        if len(parts) > 1:
+            return parts[-1].strip()
+        return text.replace("\n", " ").strip()
+
+    btn_by_num = {b["image_number"]: b for b in buttons}
+    used = set()
+    result = []
+
+    for group in groups:
+        group_buttons = group["buttons"]
+        layout = group.get("layout", "vertical")
+
+        # Find which buttons in this group have bindings
+        members = [btn_by_num[n] for n in group_buttons if n in btn_by_num]
+        if len(members) < 2:
+            continue
+
+        used.update(b["image_number"] for b in members)
+
+        # Sort by position
+        if layout == "horizontal":
+            members.sort(key=lambda b: b["x"])
+        else:
+            members.sort(key=lambda b: b["y"])
+
+        # Get prefix from first member
+        full = members[0]["text"].replace("\n", " ")
+        parts = full.split(" - ")
+        prefix = parts[0] if len(parts) > 1 else ""
+
+        # Center position
+        cx = sum(b["x"] for b in members) // len(members)
+        cy = sum(b["y"] for b in members) // len(members)
+
+        if layout == "hat" and len(members) >= 4:
+            # Determine directions by position relative to center
+            up = down = left = right = center = None
+            for b in members:
+                dx = b["x"] - cx
+                dy = b["y"] - cy
+                if abs(dx) < 20 and dy < -20:
+                    up = b
+                elif abs(dx) < 20 and dy > 20:
+                    down = b
+                elif dx < -20 and abs(dy) < 20:
+                    left = b
+                elif dx > 20 and abs(dy) < 20:
+                    right = b
+                elif abs(dx) < 20 and abs(dy) < 20:
+                    center = b
+
+            u = short_name(up["text"]) if up else ""
+            d = short_name(down["text"]) if down else ""
+            l = short_name(left["text"]) if left else ""
+            r = short_name(right["text"]) if right else ""
+            c = short_name(center["text"]) if center else ""
+
+            u_str = f"↑ {u}" if u else ""
+            d_str = f"↓ {d}" if d else ""
+            l_str = f"← {l}" if l else ""
+            r_str = f"→ {r}" if r else ""
+            c_str = f"● {c}" if c else ""
+            composite = f"{prefix}\n{u_str}\n{l_str}\t{c_str}\t{r_str}\n{d_str}"
+        elif layout == "vertical":
+            names = [short_name(b["text"]) for b in members]
+            u_str = f"↑ {names[0]}" if names[0] else ""
+            d_str = f"↓ {names[-1]}" if names[-1] else ""
+            c_str = ""
+            if len(members) == 3:
+                c_str = f"● {names[1]}" if names[1] else ""
+            composite = f"{prefix}\n{u_str}\n\t{c_str}\t\n{d_str}"
+        else:  # horizontal
+            names = [short_name(b["text"]) for b in members]
+            l_str = f"← {names[0]}" if names[0] else ""
+            r_str = f"→ {names[-1]}" if names[-1] else ""
+            c_str = ""
+            if len(members) == 3:
+                c_str = f"● {names[1]}" if names[1] else ""
+            composite = f"{prefix}\n\n{l_str}\t{c_str}\t{r_str}\n"
+
+        result.append({
+            "text": composite,
+            "x": cx,
+            "y": cy,
+            "has_modifier": False,
+        })
+
+    # Add ungrouped buttons
+    for b in buttons:
+        if b["image_number"] not in used:
+            result.append(b)
+
+    return result
+
+
 def render_binding_svg(
     job: RenderJob,
     positions: list[ButtonPosition],
@@ -520,6 +619,7 @@ def render_binding_svg(
     bindings: dict[str, Binding],
     config: AppConfig,
     output_path: str,
+    groups: list[dict] = None,
 ) -> str:
     """Render an editable SVG with device image and positioned labels.
 
@@ -563,22 +663,23 @@ def render_binding_svg(
             "image_number": pos.image_number,
         })
 
-    # Detect hat groups (reuse the same function as PNG renderer)
-    def measure_fn(text):
-        # Simple estimate for SVG (not pixel-perfect but good enough for grouping)
-        lines_list = text.split("\n")
-        max_w = max(len(l) * 8 for l in lines_list)
-        total_h = len(lines_list) * 16
-        return max_w, total_h
-
-    bound_buttons = _group_hat_buttons(bound_buttons, measure_fn)
+    # Group buttons using explicit groups from mapping file, or fall back to spatial heuristics
+    if groups:
+        bound_buttons = _group_by_mapping(bound_buttons, groups)
+    else:
+        def measure_fn(text):
+            lines_list = text.split("\n")
+            max_w = max(len(l) * 8 for l in lines_list)
+            total_h = len(lines_list) * 16
+            return max_w, total_h
+        bound_buttons = _group_hat_buttons(bound_buttons, measure_fn)
 
     # Build SVG
     lines = []
     lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w}" height="{svg_h}">')
     lines.append(f'  <image href="data:{mime};base64,{img_b64}" width="{svg_w}" height="{svg_h}"/>')
 
-    font_size = 14
+    font_size = max(14, round(svg_w / 80))
     line_h = font_size + 2
     char_w = font_size * 0.6
     pad = 8
@@ -644,7 +745,7 @@ def render_binding_svg(
 
     # Placement offsets for 8 positions around group center
     # 12, 3, 6, 9, then 1:30, 4:30, 7:30, 10:30
-    group_radius = 65  # group half-spread (~44px) + marker radius (17px) + gap (4px)
+    group_radius = max(65, round(svg_w / 17))  # scale with image size
     def _candidate_positions(btn):
         """Return list of (cx, cy) for the label anchor at 8 clock positions."""
         gx, gy = btn["x"], btn["y"]
@@ -709,7 +810,7 @@ def render_binding_svg(
         placed_rects.append(_hat_group_bbox(btn, best_pos[0], best_pos[1]))
 
     # Second pass: place single button labels with collision avoidance
-    single_radius = 25  # marker radius (17px) + gap
+    single_radius = max(25, round(svg_w / 45))  # scale with image size
     single_placements = {}  # index -> (lx, ly)
 
     for i, btn in enumerate(bound_buttons):
@@ -723,8 +824,6 @@ def render_binding_svg(
         label_h = line_h
 
         r = single_radius
-        # Candidates: (lx, ly) where lx is center x, ly is text baseline y
-        # bbox: (lx - label_w/2, ly - font_size, label_w, label_h)
         candidates = [
             (gx, gy - r - label_h + font_size),                # 12
             (gx + r + label_w / 2, gy),                         # 3

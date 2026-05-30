@@ -32,6 +32,7 @@ def load_device_mapping(mapping_path: str) -> DeviceMapping:
         description=data.get("description", ""),
         mappings=mappings,
         axes=axes,
+        groups=data.get("groups", []),
     )
 
 

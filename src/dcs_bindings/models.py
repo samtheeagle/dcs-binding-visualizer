@@ -59,6 +59,7 @@ class DeviceMapping:
     description: str = ""
     mappings: dict[int, str] = field(default_factory=dict)  # image_number -> DCS button ID
     axes: list[dict[str, str]] = field(default_factory=list)
+    groups: list[dict] = field(default_factory=list)  # [{buttons: [1,2,3], layout: "vertical"}]
 
 
 @dataclass
