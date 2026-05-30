@@ -341,16 +341,20 @@ def _group_hat_buttons(
                 elif abs(btn["x"] - mid_x) < tolerance:
                     center_idx = j
 
-        if left_idx is None or right_idx is None:
-            continue
+        if left_idx is None and right_idx is None and center_idx is None:
+            continue  # need at least one of left, right, or center to form a group
 
-        # Found a cross pattern
-        used.update([i, down_idx, left_idx, right_idx])
+        # Found a cross pattern (possibly partial)
+        used.update([i, down_idx])
+        if left_idx is not None:
+            used.add(left_idx)
+        if right_idx is not None:
+            used.add(right_idx)
         if center_idx is not None:
             used.add(center_idx)
 
-        btn_left = buttons[left_idx]
-        btn_right = buttons[right_idx]
+        btn_left = buttons[left_idx] if left_idx is not None else None
+        btn_right = buttons[right_idx] if right_idx is not None else None
         btn_center = buttons[center_idx] if center_idx is not None else None
 
         # Extract short directional names
@@ -367,15 +371,74 @@ def _group_hat_buttons(
 
         u = short_name(btn_up["text"])
         d = short_name(btn_down["text"])
-        l = short_name(btn_left["text"])
-        r = short_name(btn_right["text"])
+        l = short_name(btn_left["text"]) if btn_left else ""
+        r = short_name(btn_right["text"]) if btn_right else ""
         c = short_name(btn_center["text"]) if btn_center else ""
 
-        # Build compact cross layout
-        if c:
-            composite = f"{prefix}\n↑ {u}\n← {l}\t● {c}\t→ {r}\n↓ {d}"
+        # Build compact cross layout - only show arrows when bound
+        u_str = f"↑ {u}" if u else ""
+        d_str = f"↓ {d}" if d else ""
+        l_str = f"← {l}" if l else ""
+        r_str = f"→ {r}" if r else ""
+        c_str = f"● {c}" if c else ""
+        composite = f"{prefix}\n{u_str}\n{l_str}\t{c_str}\t{r_str}\n{d_str}"
+
+        result.append({
+            "text": composite,
+            "x": mid_x,
+            "y": mid_y,
+            "has_modifier": False,
+        })
+
+    # Second pass: detect horizontal rows (3 buttons at same y)
+    remaining = [i for i in range(len(buttons)) if i not in used]
+    for i in remaining:
+        if i in used:
+            continue
+        btn_i = buttons[i]
+        # Find all buttons at the same y
+        row = [i]
+        for j in remaining:
+            if j == i or j in used:
+                continue
+            if abs(buttons[j]["y"] - btn_i["y"]) < tolerance and abs(buttons[j]["x"] - btn_i["x"]) < 150:
+                row.append(j)
+
+        if len(row) < 3:
+            continue
+
+        # Sort by x to determine left/center/right
+        row.sort(key=lambda idx: buttons[idx]["x"])
+
+        if len(row) == 3:
+            left_idx, center_idx, right_idx = row
         else:
-            composite = f"{prefix}\n↑ {u}\n← {l}\t\t→ {r}\n↓ {d}"
+            continue
+
+        used.update(row)
+
+        btn_l = buttons[left_idx]
+        btn_c = buttons[center_idx] if center_idx is not None else None
+        btn_r = buttons[right_idx]
+
+        # Extract prefix from any button
+        source = btn_c if btn_c else btn_l
+        full = source["text"].replace("\n", " ")
+        parts = full.split(" - ")
+        prefix = parts[0] if len(parts) > 1 else ""
+
+        l_name = short_name(btn_l["text"])
+        m_name = short_name(btn_c["text"]) if btn_c else ""
+        r_name = short_name(btn_r["text"])
+
+        l_str = f"← {l_name}" if l_name else ""
+        m_str = f"● {m_name}" if m_name else ""
+        r_str = f"→ {r_name}" if r_name else ""
+
+        composite = f"{prefix}\n\n{l_str}\t{m_str}\t{r_str}\n"
+
+        mid_x = buttons[center_idx]["x"] if center_idx is not None else (btn_l["x"] + btn_r["x"]) // 2
+        mid_y = btn_l["y"]
 
         result.append({
             "text": composite,
@@ -646,7 +709,7 @@ def render_binding_svg(
         placed_rects.append(_hat_group_bbox(btn, best_pos[0], best_pos[1]))
 
     # Second pass: place single button labels with collision avoidance
-    single_radius = 25  # marker radius (17) + gap (8)
+    single_radius = 25  # marker radius (17px) + gap
     single_placements = {}  # index -> (lx, ly)
 
     for i, btn in enumerate(bound_buttons):
@@ -667,7 +730,7 @@ def render_binding_svg(
             (gx + r + label_w / 2, gy),                         # 3
             (gx, gy + r + font_size),                           # 6
             (gx - r - label_w / 2, gy),                         # 9
-            (gx + r * 0.7 + label_w / 2, gy - r * 0.7),        # 1:30
+            (gx + r * 0.7 + label_w / 2, gy - r * 1.0),        # 1:30
             (gx + r * 0.7 + label_w / 2, gy + r * 0.7),        # 4:30
             (gx - r * 0.7 - label_w / 2, gy + r * 0.7),        # 7:30
             (gx - r * 0.7 - label_w / 2, gy - r * 0.7),        # 10:30
@@ -730,22 +793,25 @@ def render_binding_svg(
 
             table_x = cx - table_w / 2
 
-            # Text elements
-            lines.append(f'    <text id="{label_id}" text-anchor="middle">')
-            lines.append(f'      <tspan x="{cx}" y="{cy}">{esc(prefix)}</tspan>')
-            lines.append(f'      <tspan x="{cx}" y="{cy + cell_h}">{esc(up)}</tspan>')
+            # Text elements — align center stack to middle column
             left_cx = table_x + col_widths[0] / 2
             mid_cx = table_x + col_widths[0] + col_widths[1] / 2
             right_cx = table_x + col_widths[0] + col_widths[1] + col_widths[2] / 2
+
+            mid_left = table_x + col_widths[0]  # left edge of middle column
+
+            lines.append(f'    <g id="{label_id}">')
+            lines.append(f'      <text x="{cx}" y="{cy}" text-anchor="middle">{esc(prefix)}</text>')
+            lines.append(f'      <text x="{mid_left:.0f}" y="{cy + cell_h}">{esc(up)}</text>')
             if len(middle_parts) == 3:
-                lines.append(f'      <tspan x="{left_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[0])}</tspan>')
-                lines.append(f'      <tspan x="{mid_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[1])}</tspan>')
-                lines.append(f'      <tspan x="{right_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[2])}</tspan>')
+                lines.append(f'      <text x="{left_cx:.0f}" y="{cy + cell_h * 2}" text-anchor="middle">{esc(middle_parts[0])}</text>')
+                lines.append(f'      <text x="{mid_left:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[1])}</text>')
+                lines.append(f'      <text x="{right_cx:.0f}" y="{cy + cell_h * 2}" text-anchor="middle">{esc(middle_parts[2])}</text>')
             elif len(middle_parts) == 2:
-                lines.append(f'      <tspan x="{left_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[0])}</tspan>')
-                lines.append(f'      <tspan x="{right_cx:.0f}" y="{cy + cell_h * 2}">{esc(middle_parts[1])}</tspan>')
-            lines.append(f'      <tspan x="{cx}" y="{cy + cell_h * 3}">{esc(down)}</tspan>')
-            lines.append(f'    </text>')
+                lines.append(f'      <text x="{left_cx:.0f}" y="{cy + cell_h * 2}" text-anchor="middle">{esc(middle_parts[0])}</text>')
+                lines.append(f'      <text x="{right_cx:.0f}" y="{cy + cell_h * 2}" text-anchor="middle">{esc(middle_parts[1])}</text>')
+            lines.append(f'      <text x="{mid_left:.0f}" y="{cy + cell_h * 3}">{esc(down)}</text>')
+            lines.append(f'    </g>')
         else:
             # Fallback for other multiline
             lx = btn["x"]

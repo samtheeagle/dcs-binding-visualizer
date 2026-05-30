@@ -112,18 +112,7 @@ def render(state, aircraft, seat, force_detect, output_dir, dry_run):
     os.makedirs(config.output.output_dir, exist_ok=True)
     rendered = 0
     for job in jobs:
-        left_positions = device_data.get("left", {}).get("positions", [])
-        right_positions = device_data.get("right", {}).get("positions", [])
-        left_image = device_data.get("left", {}).get("image_path", "")
-        right_image = device_data.get("right", {}).get("image_path", "")
-
-        path = render_binding_image(
-            job, left_positions, right_positions,
-            left_image, right_image, config,
-        )
-        _echo(state, f"  ✓ Saved: {path}")
-
-        # Also render SVG for each device (editable in Inkscape)
+        # Render SVG for each device (editable in Inkscape)
         from .renderer import render_binding_svg
         for position, data in device_data.items():
             svg_filename = job.aircraft_name
