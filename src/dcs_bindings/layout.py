@@ -7,14 +7,14 @@ from .models import LabelBox
 
 # 8 candidate positions around a button (dx_factor, dy_factor relative to label size)
 PLACEMENT_CANDIDATES = [
-    (1.2, -0.3),   # Right of button
-    (-2.2, -0.3),  # Left of button
-    (-0.5, -1.5),  # Above button
-    (-0.5, 1.2),   # Below button
-    (1.0, -1.3),   # Upper-right diagonal
-    (1.0, 1.0),    # Lower-right diagonal
-    (-2.0, -1.3),  # Upper-left diagonal
-    (-2.0, 1.0),   # Lower-left diagonal
+    (1.8, -0.3),   # Right of button
+    (-2.8, -0.3),  # Left of button
+    (-0.5, -2.0),  # Above button
+    (-0.5, 1.8),   # Below button
+    (1.5, -1.8),   # Upper-right diagonal
+    (1.5, 1.5),    # Lower-right diagonal
+    (-2.5, -1.8),  # Upper-left diagonal
+    (-2.5, 1.5),   # Lower-left diagonal
 ]
 
 
@@ -41,6 +41,14 @@ def place_labels(
     # Sort buttons top-to-bottom, left-to-right
     sorted_buttons = sorted(buttons, key=lambda b: (b["y"], b["x"]))
 
+    # Compute center of all buttons for relative placement
+    if sorted_buttons:
+        avg_x = sum(b["x"] for b in sorted_buttons) / len(sorted_buttons)
+        avg_y = sum(b["y"] for b in sorted_buttons) / len(sorted_buttons)
+    else:
+        avg_x = canvas_width / 2
+        avg_y = canvas_height / 2
+
     placed: list[LabelBox] = []
 
     for btn in sorted_buttons:
@@ -54,8 +62,13 @@ def place_labels(
         w += 10
         h += 6
 
+        # Determine preferred placement direction based on button position
+        # relative to the group center
+        candidates = _get_oriented_candidates(btn_x, btn_y, avg_x, avg_y)
+
         label = _try_place(
-            text, btn_x, btn_y, w, h, has_mod, placed, canvas_width, canvas_height
+            text, btn_x, btn_y, w, h, has_mod, placed, canvas_width, canvas_height,
+            candidates,
         )
         if label:
             label.needs_leader_line = (
@@ -64,6 +77,62 @@ def place_labels(
             placed.append(label)
 
     return placed
+
+
+def _get_oriented_candidates(
+    btn_x: int, btn_y: int, center_x: float, center_y: float
+) -> list[tuple[float, float]]:
+    """Return placement candidates ordered by the button's position relative to center."""
+    # If button is left of center, prefer placing label to the left
+    # If button is right of center, prefer placing label to the right
+    # Same logic for above/below
+    left = btn_x < center_x
+    above = btn_y < center_y
+
+    if left and above:
+        return [
+            (-2.8, -1.8),  # Upper-left
+            (-2.8, -0.3),  # Left
+            (-0.5, -2.0),  # Above
+            (-2.5, 1.5),   # Lower-left
+            (1.8, -0.3),   # Right
+            (1.5, -1.8),   # Upper-right
+            (-0.5, 1.8),   # Below
+            (1.5, 1.5),    # Lower-right
+        ]
+    elif left and not above:
+        return [
+            (-2.8, -0.3),  # Left
+            (-2.5, 1.5),   # Lower-left
+            (-0.5, 1.8),   # Below
+            (-2.8, -1.8),  # Upper-left
+            (1.8, -0.3),   # Right
+            (1.5, 1.5),    # Lower-right
+            (-0.5, -2.0),  # Above
+            (1.5, -1.8),   # Upper-right
+        ]
+    elif not left and above:
+        return [
+            (1.8, -0.3),   # Right
+            (1.5, -1.8),   # Upper-right
+            (-0.5, -2.0),  # Above
+            (1.5, 1.5),    # Lower-right
+            (-2.8, -0.3),  # Left
+            (-2.8, -1.8),  # Upper-left
+            (-0.5, 1.8),   # Below
+            (-2.5, 1.5),   # Lower-left
+        ]
+    else:  # right and below
+        return [
+            (1.8, -0.3),   # Right
+            (1.5, 1.5),    # Lower-right
+            (-0.5, 1.8),   # Below
+            (1.5, -1.8),   # Upper-right
+            (-2.8, -0.3),  # Left
+            (-2.5, 1.5),   # Lower-left
+            (-0.5, -2.0),  # Above
+            (-2.8, -1.8),  # Upper-left
+        ]
 
 
 
@@ -77,13 +146,17 @@ def _try_place(
     placed: list[LabelBox],
     canvas_width: int,
     canvas_height: int,
+    candidates: list[tuple[float, float]] = None,
 ) -> Optional[LabelBox]:
     """Try to place a label using the 8-position candidate algorithm.
 
     Falls back to extended displacement and force-directed nudging.
     """
-    # Phase 1: Try 8 candidate positions at normal distance
-    for dx_factor, dy_factor in PLACEMENT_CANDIDATES:
+    if candidates is None:
+        candidates = PLACEMENT_CANDIDATES
+
+    # Phase 1: Try candidate positions at normal distance
+    for dx_factor, dy_factor in candidates:
         x = btn_x + int(dx_factor * width * 0.5)
         y = btn_y + int(dy_factor * height)
         label = LabelBox(
@@ -95,7 +168,7 @@ def _try_place(
 
     # Phase 2: Extended displacement (try further out)
     for multiplier in [1.5, 2.0, 2.5, 3.0]:
-        for dx_factor, dy_factor in PLACEMENT_CANDIDATES:
+        for dx_factor, dy_factor in candidates:
             x = btn_x + int(dx_factor * width * 0.5 * multiplier)
             y = btn_y + int(dy_factor * height * multiplier)
             label = LabelBox(

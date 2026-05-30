@@ -140,10 +140,13 @@ def _render_device(
             bbox = font.getbbox(text)
             return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
-        label_text = abbreviate(
-            binding.action_name,
+        # Convert ALL CAPS words to Title Case for readability
+        action_name = _title_case(binding.action_name)
+
+        label_text = _wrap_text(
+            action_name,
             rc.label_max_width,
-            lambda t: measure(t)[0],
+            font,
         )
 
         if binding.has_modifier:
@@ -158,8 +161,19 @@ def _render_device(
 
     # Run label placement
     def measure_fn(text):
-        bbox = font.getbbox(text)
-        return bbox[2] - bbox[0], bbox[3] - bbox[1]
+        lines = text.split("\n")
+        max_w = 0
+        total_h = 0
+        for line in lines:
+            bbox = font.getbbox(line)
+            max_w = max(max_w, bbox[2] - bbox[0])
+            total_h += bbox[3] - bbox[1]
+        # Add line spacing
+        total_h += (len(lines) - 1) * 2
+        return max_w, total_h
+
+    # Detect hat groups (cross patterns) and replace with composite labels
+    buttons_for_layout = _group_hat_buttons(buttons_for_layout, measure_fn)
 
     labels = place_labels(
         buttons_for_layout,
@@ -187,20 +201,17 @@ def _draw_label(
     bg_colour = (255, 255, 255, bg_opacity) if rc.background == "white" else (40, 40, 40, bg_opacity)
 
     # Draw background rectangle
-    draw.rectangle(
-        [label.x, label.y, label.right, label.bottom],
-        fill=(255, 255, 255),
-        outline=(150, 150, 150),
-        width=1,
-    )
+    # (transparent - no fill)
 
     # Draw text
     text_colour = (30, 30, 30) if rc.background == "white" else (220, 220, 220)
-    draw.text(
+    draw.multiline_text(
         (label.x + 5, label.y + 3),
         label.text,
         fill=text_colour,
         font=font,
+        spacing=2,
+        align="center",
     )
 
     # Draw leader line if needed
@@ -262,6 +273,145 @@ def _draw_title(
     draw.text((x, y), title, fill=text_colour, font=font)
 
     return y + text_h + 10
+
+
+def _title_case(text: str) -> str:
+    """Convert words that are ALL CAPS to Title Case, leave acronyms (≤3 chars) unchanged."""
+    words = text.split()
+    result = []
+    for word in words:
+        stripped = word.strip("-/()[]")
+        if len(stripped) > 3 and stripped == stripped.upper() and stripped.isalpha():
+            result.append(word.capitalize())
+        else:
+            result.append(word)
+    return " ".join(result)
+
+
+def _group_hat_buttons(
+    buttons: list[dict],
+    measure_fn,
+) -> list[dict]:
+    """Detect cross-pattern button groups (hat switches) and merge into composite labels.
+
+    Detects 4 buttons arranged in a cross pattern (up/down/left/right).
+    A 5th center button is included if present.
+    """
+    if len(buttons) < 4:
+        return buttons
+
+    used = set()
+    result = []
+
+    # For each button, check if it could be the "up" of a cross
+    # by looking for down (same x, below), left (same y, to left), right (same y, to right)
+    tolerance = 25  # pixels tolerance for alignment
+
+    for i, btn_up in enumerate(buttons):
+        if i in used:
+            continue
+
+        # Look for a button directly below (same x ± tolerance, further y)
+        down_idx = None
+        for j, btn in enumerate(buttons):
+            if j == i or j in used:
+                continue
+            if abs(btn["x"] - btn_up["x"]) < tolerance and 50 < (btn["y"] - btn_up["y"]) < 150:
+                down_idx = j
+                break
+
+        if down_idx is None:
+            continue
+
+        btn_down = buttons[down_idx]
+        # The center y of the cross
+        mid_y = (btn_up["y"] + btn_down["y"]) // 2
+        mid_x = btn_up["x"]
+
+        # Look for left and right at mid_y
+        left_idx = right_idx = center_idx = None
+        for j, btn in enumerate(buttons):
+            if j in (i, down_idx) or j in used:
+                continue
+            if abs(btn["y"] - mid_y) < tolerance:
+                if -150 < (btn["x"] - mid_x) < -30:
+                    left_idx = j
+                elif 30 < (btn["x"] - mid_x) < 150:
+                    right_idx = j
+                elif abs(btn["x"] - mid_x) < tolerance:
+                    center_idx = j
+
+        if left_idx is None or right_idx is None:
+            continue
+
+        # Found a cross pattern
+        used.update([i, down_idx, left_idx, right_idx])
+        if center_idx is not None:
+            used.add(center_idx)
+
+        btn_left = buttons[left_idx]
+        btn_right = buttons[right_idx]
+        btn_center = buttons[center_idx] if center_idx is not None else None
+
+        # Extract short directional names
+        def short_name(text):
+            parts = text.replace("\n", " ").split(" - ")
+            if len(parts) > 1:
+                return parts[-1].strip()
+            return text.replace("\n", " ").strip()
+
+        # Get common prefix from any of the directional buttons
+        full = btn_up["text"].replace("\n", " ")
+        parts = full.split(" - ")
+        prefix = parts[0] if len(parts) > 1 else ""
+
+        u = short_name(btn_up["text"])
+        d = short_name(btn_down["text"])
+        l = short_name(btn_left["text"])
+        r = short_name(btn_right["text"])
+        c = short_name(btn_center["text"]) if btn_center else ""
+
+        # Build compact cross layout
+        if c:
+            composite = f"{prefix}\n↑ {u}\n← {l}  ● {c}  → {r}\n↓ {d}"
+        else:
+            composite = f"{prefix}\n↑ {u}\n← {l}  →  {r}\n↓ {d}"
+
+        result.append({
+            "text": composite,
+            "x": mid_x,
+            "y": mid_y,
+            "has_modifier": False,
+        })
+
+    # Add remaining ungrouped buttons
+    for i, btn in enumerate(buttons):
+        if i not in used:
+            result.append(btn)
+
+    return result
+
+
+def _wrap_text(text: str, max_width: int, font: ImageFont.FreeTypeFont) -> str:
+    """Wrap text to fit within max_width, breaking on word boundaries."""
+    words = text.split()
+    lines = []
+    current_line = ""
+
+    for word in words:
+        test = f"{current_line} {word}".strip()
+        bbox = font.getbbox(test)
+        width = bbox[2] - bbox[0]
+        if width <= max_width or not current_line:
+            current_line = test
+        else:
+            lines.append(current_line)
+            current_line = word
+
+    if current_line:
+        lines.append(current_line)
+
+    return "\n".join(lines)
 
 
 def _load_font(
