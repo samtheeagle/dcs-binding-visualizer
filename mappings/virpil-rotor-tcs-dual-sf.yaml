@@ -1,88 +1,35 @@
-# Virpil Rotor TCS Plus Base — Dual-SF Collective Grip
-# Default button mapping (Windows DCS button IDs)
+# Virpil Rotor TCS Plus — Dual-SF Collective Grip
 #
-# DCS Device Name: "VPC Collective + Dual-SF"
-# (may also appear as "VIRPIL Controls VPC Rotor TCS Plus")
-#
-# The Dual-SF is a two-handed collective grip designed for helicopter simulation.
-# It has 19 physical inputs including HAT switches with push function,
-# momentary buttons, and triggers.
-#
-# The Rotor TCS Plus base adds an integrated throttle axis via the twist handle.
-#
-# Note: Your image should have numbered circles at each button/hat/switch location.
-# The numbers in this file (1, 2, 3...) correspond to the circled numbers on YOUR image.
-#
-# Sources:
-#   - Virpil VPC Software button testing
-#   - Virpil support documentation
-#   - Community reports from DCS World forums
+# Maps image circle number -> device button ID.
+# Image numbers correspond to the Virpil VPC Software button numbering.
 
 device_name: "VPC Collective + Dual-SF"
 device_name_alt: "VIRPIL Controls VPC Rotor TCS Plus"
-description: "Virpil Rotor TCS Plus with Dual-SF Collective Grip"
+description: "Virpil Rotor TCS Plus with Dual-SF Collective Grip (19 buttons, 2 axes)"
 
-# Axes provided by the Rotor TCS Plus base
 axes:
   - id: "JOY_Z"
-    description: "Collective Axis (Up/Down lever movement)"
+    description: "Collective Axis"
   - id: "JOY_RX"
-    description: "Twist Throttle (Rotor TCS Plus base integrated throttle)"
+    description: "Twist Throttle"
 
-# Maps the NUMBER visible in the image circle -> DCS button ID
-# The Dual-SF has controls on both the left and right grip sides.
 mappings:
-  # --- LEFT SIDE CONTROLS ---
-
-  # --- Left Trigger ---
-  1: "JOY_BTN1"            # Left Trigger (index finger)
-
-  # --- Left Hat Switch (4-way + push) ---
-  2: "JOY_BTN2"            # Left Hat - Forward (Up)
-  3: "JOY_BTN3"            # Left Hat - Aft (Down)
-  4: "JOY_BTN4"            # Left Hat - Left
-  5: "JOY_BTN5"            # Left Hat - Right
-  6: "JOY_BTN6"            # Left Hat - Push (Depress)
-
-  # --- Left Thumb Button ---
-  7: "JOY_BTN7"            # Left Thumb Button (momentary)
-
-  # --- Left Pinky Button ---
-  8: "JOY_BTN8"            # Left Pinky Button (momentary)
-
-  # --- RIGHT SIDE CONTROLS ---
-
-  # --- Right Trigger ---
-  9: "JOY_BTN9"            # Right Trigger (index finger)
-
-  # --- Right Hat Switch (4-way + push) ---
-  10: "JOY_BTN10"          # Right Hat - Forward (Up)
-  11: "JOY_BTN11"          # Right Hat - Aft (Down)
-  12: "JOY_BTN12"          # Right Hat - Left
-  13: "JOY_BTN13"          # Right Hat - Right
-  14: "JOY_BTN14"          # Right Hat - Push (Depress)
-
-  # --- Right Thumb Button ---
-  15: "JOY_BTN15"          # Right Thumb Button (momentary)
-
-  # --- CENTER / ADDITIONAL CONTROLS ---
-
-  # --- Engine Idle / Detent Button ---
-  16: "JOY_BTN16"          # Center Button (Engine Idle Release / detent)
-
-  # --- Top Buttons ---
-  17: "JOY_BTN17"          # Top Left Button (momentary)
-  18: "JOY_BTN18"          # Top Right Button (momentary)
-
-  # --- Base Lever Button (if present on Rotor TCS Plus) ---
-  19: "JOY_BTN19"          # Base / Grip Lock Button
-
-# Optional: Linux-specific overrides
-# Virpil devices generally have cleaner Linux HID support than WinWing,
-# but button ordering may still differ from Windows.
-# Use 'evtest' or 'jstest' to verify on your system.
-#
-# linux_overrides:
-#   1: "JOY_BTN1"
-#   2: "JOY_BTN2"
-#   # ... adjust based on evtest output on your system
+  1: "JOY_BTN1"
+  2: "JOY_BTN2"
+  3: "JOY_BTN3"
+  4: "JOY_BTN4"
+  5: "JOY_BTN5"
+  6: "JOY_BTN6"
+  7: "JOY_BTN7"
+  8: "JOY_BTN8"
+  9: "JOY_BTN9"
+  10: "JOY_BTN10"
+  11: "JOY_BTN11"
+  12: "JOY_BTN12"
+  13: "JOY_BTN13"
+  14: "JOY_BTN14"
+  15: "JOY_BTN15"
+  16: "JOY_BTN16"
+  17: "JOY_BTN17"
+  18: "JOY_BTN18"
+  19: "JOY_BTN19"

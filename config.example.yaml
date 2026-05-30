@@ -28,7 +28,6 @@ detection:
   saturation_min: 100           # minimum saturation (0-255)
   value_min: 100                # minimum brightness (0-255)
   min_marker_area: 300          # px² — minimum contour area to consider
-  circularity_threshold: 0.6    # 1.0 = perfect circle (lower = more lenient)
   ocr_confidence_threshold: 60  # Tesseract confidence minimum (0-100)
 
 # ─── Rendering Settings ──────────────────────────────────────

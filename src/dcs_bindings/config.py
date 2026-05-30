@@ -18,7 +18,6 @@ DEFAULT_DETECTION = {
     "saturation_min": 100,
     "value_min": 100,
     "min_marker_area": 300,
-    "circularity_threshold": 0.6,
     "ocr_confidence_threshold": 60,
 }
 
@@ -61,7 +60,6 @@ class DetectionConfig:
     saturation_min: int = 100
     value_min: int = 100
     min_marker_area: int = 300
-    circularity_threshold: float = 0.6
     ocr_confidence_threshold: int = 60
 
     @property
@@ -188,7 +186,6 @@ def save_config(config: AppConfig, config_path: Optional[str] = None) -> None:
             "saturation_min": config.detection.saturation_min,
             "value_min": config.detection.value_min,
             "min_marker_area": config.detection.min_marker_area,
-            "circularity_threshold": config.detection.circularity_threshold,
             "ocr_confidence_threshold": config.detection.ocr_confidence_threshold,
         },
         "rendering": {

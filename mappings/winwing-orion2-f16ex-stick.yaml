@@ -3,8 +3,8 @@
 # Maps image circle number -> device button ID.
 # Image numbers correspond to the WinWing manual button numbering.
 
-device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-device_name_alt: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name_alt: "WINWING Orion Joystick Base 2 + JGRIP-F16"
 description: "WinWing Orion 2 EX with F-16EX Stick Grip (incl. EX expansion)"
 
 axes:
@@ -17,52 +17,7 @@ axes:
   - id: "JOY_RY"
     description: "Mini-joystick Y"
 
-# Windows button IDs (used when DCS runs natively on Windows)
 mappings:
-  1: "JOY_BTN1"
-  2: "JOY_BTN6"
-  3: "JOY_BTN2"
-  4: "JOY_BTN3"
-  5: "JOY_BTN4"
-  6: "JOY_BTN_POV1_U"
-  7: "JOY_BTN_POV1_D"
-  8: "JOY_BTN_POV1_L"
-  9: "JOY_BTN_POV1_R"
-  10: "JOY_BTN7"
-  11: "JOY_BTN_POV2_U"
-  12: "JOY_BTN_POV2_D"
-  13: "JOY_BTN_POV2_L"
-  14: "JOY_BTN_POV2_R"
-  15: "JOY_BTN8"
-  16: "JOY_BTN_POV3_U"
-  17: "JOY_BTN_POV3_D"
-  18: "JOY_BTN_POV3_L"
-  19: "JOY_BTN_POV3_R"
-  20: "JOY_BTN9"
-  21: "JOY_BTN_POV4_U"
-  22: "JOY_BTN_POV4_D"
-  23: "JOY_BTN_POV4_L"
-  24: "JOY_BTN_POV4_R"
-  25: "JOY_BTN10"
-  26: "JOY_BTN11"
-  27: "JOY_BTN12"
-  28: "JOY_BTN13"
-  29: "JOY_BTN14"
-  30: "JOY_BTN15"
-  31: "JOY_BTN5"
-  32: "JOY_BTN16"
-  33: "JOY_BTN17"
-  34: "JOY_BTN18"
-  35: "JOY_BTN19"
-  36: "JOY_BTN20"
-  37: "JOY_BTN21"
-  38: "JOY_BTN22"
-  39: "JOY_BTN23"
-
-# Linux button IDs (used when DCS runs via Proton/Wine)
-# On Linux the button numbers match the WinWing manual numbering.
-# The trim hat reports as a POV axis rather than buttons.
-linux_overrides:
   1: "JOY_BTN1"
   2: "JOY_BTN2"
   3: "JOY_BTN3"
@@ -105,3 +60,8 @@ linux_overrides:
   40: "JOY_BTN40"
   41: "JOY_BTN41"
   42: "JOY_BTN42"
+  # Trim hat (reported as POV axis on this device)
+  43: "JOY_BTN_POV1_U"
+  44: "JOY_BTN_POV1_D"
+  45: "JOY_BTN_POV1_L"
+  46: "JOY_BTN_POV1_R"

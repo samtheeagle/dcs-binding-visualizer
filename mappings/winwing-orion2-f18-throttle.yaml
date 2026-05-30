@@ -1,214 +1,104 @@
 # WinWing Orion 2 — F/A-18 Throttle Handles + Base
-# Default button mapping (Windows DCS button IDs)
 #
-# DCS Device Name: "WINWING Orion Throttle Base II + F18 HANDLE"
-# (newer firmware: "WINCTRL Orion Throttle Base II + F18 HANDLE")
-#
-# The F/A-18 throttle replicates the real F/A-18C Hornet throttle quadrant.
-# Total reported buttons: 80 (handles + base combined), 6 axes
-# The throttle has two handles (Left and Right) plus a base panel with
-# toggle switches, rotary encoders, and additional controls.
-#
-# IMPORTANT: This mapping is a best-effort default based on community research.
-# Exact button IDs should be verified using WinWing SimAppPro or DCS's
-# controller settings page. Button numbers may vary with firmware version.
-#
-# Note: Your image should have numbered circles at each button/hat/switch location.
-# The numbers in this file (1, 2, 3...) correspond to the circled numbers on YOUR image.
-#
-# Sources:
-#   - WinWing SimAppPro button testing
-#   - DCS World controller configuration
-#   - Community maps from digitalcombatsimulator.com
-#   - SimulatorHardware.com specification (80 buttons, 6 axes confirmed)
+# Maps image circle number -> device button ID.
+# Image numbers correspond to the WinWing manual button numbering.
 
-device_name: "WINWING Orion Throttle Base II + F18 HANDLE"
-device_name_alt: "Winwing WINCTRL Orion Throttle Base II + F18 HANDLE"
-description: "WinWing Orion 2 Throttle with F/A-18 Handles (80 buttons, 6 axes)"
+device_name: "Winwing WINCTRL Orion Throttle Base II + F18 HANDLE"
+device_name_alt: "WINWING Orion Throttle Base II + F18 HANDLE"
+description: "WinWing Orion 2 Throttle with F/A-18 Handles (80 buttons, 8 axes)"
 
-# Axes provided by the throttle (6 total)
 axes:
   - id: "JOY_Z"
     description: "Left Throttle Axis"
   - id: "JOY_RZ"
     description: "Right Throttle Axis"
   - id: "JOY_SLIDER1"
-    description: "Antenna Elevation Wheel (Left Handle)"
+    description: "Antenna Elevation Wheel"
   - id: "JOY_SLIDER2"
-    description: "Radar Elevation Wheel (Right Handle)"
+    description: "Radar Elevation Wheel"
   - id: "JOY_RX"
-    description: "TDC Mini-Stick X (if analog mode)"
+    description: "TDC Mini-Stick X"
   - id: "JOY_RY"
-    description: "TDC Mini-Stick Y (if analog mode)"
+    description: "TDC Mini-Stick Y"
 
-# Maps the NUMBER visible in the image circle -> DCS button ID
 mappings:
-  # ═══════════════════════════════════════════════════════════════
-  # LEFT HANDLE (F/A-18 left throttle grip)
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Comm Switch (4-way + push) ---
-  1: "JOY_BTN1"            # Comm Switch - Forward (COMM1)
-  2: "JOY_BTN2"            # Comm Switch - Aft (COMM2)
-  3: "JOY_BTN3"            # Comm Switch - Left (IFF)
-  4: "JOY_BTN4"            # Comm Switch - Right (ILS)
-  5: "JOY_BTN5"            # Comm Switch - Push (PLAIN)
-
-  # --- Throttle Designator Controller (4-way + push) ---
-  6: "JOY_BTN6"            # TDC - Forward (Up)
-  7: "JOY_BTN7"            # TDC - Aft (Down)
-  8: "JOY_BTN8"            # TDC - Left
-  9: "JOY_BTN9"            # TDC - Right
-  10: "JOY_BTN10"          # TDC - Push (Depress)
-
-  # --- Speed Brake (2-way momentary) ---
-  11: "JOY_BTN11"          # Speed Brake - Forward (Retract)
-  12: "JOY_BTN12"          # Speed Brake - Aft (Extend)
-
-  # --- Left Throttle Finger Lift ---
-  13: "JOY_BTN13"          # Left Finger Lift (Idle Detent)
-
-  # --- Dispenser / CM Switch (4-way + push) ---
-  14: "JOY_BTN14"          # Dispenser - Forward (ECM)
-  15: "JOY_BTN15"          # Dispenser - Aft (JETT)
-  16: "JOY_BTN16"          # Dispenser - Left (ALE-47 Manual)
-  17: "JOY_BTN17"          # Dispenser - Right (Bypass)
-  18: "JOY_BTN18"          # Dispenser - Push (Dispense)
-
-  # ═══════════════════════════════════════════════════════════════
-  # RIGHT HANDLE (F/A-18 right throttle grip)
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Mic Switch (4-way + push) ---
-  19: "JOY_BTN19"          # Mic Switch - Forward
-  20: "JOY_BTN20"          # Mic Switch - Aft
-  21: "JOY_BTN21"          # Mic Switch - Left
-  22: "JOY_BTN22"          # Mic Switch - Right
-  23: "JOY_BTN23"          # Mic Switch - Push
-
-  # --- Cage/Uncage ---
-  24: "JOY_BTN24"          # Cage/Uncage Button
-
-  # --- Right Throttle Finger Lift ---
-  25: "JOY_BTN25"          # Right Finger Lift (Idle Detent)
-
-  # --- A/A - A/G Selector (2-way) ---
-  26: "JOY_BTN26"          # A/A Weapon Select - Forward
-  27: "JOY_BTN27"          # A/G Weapon Select - Aft
-
-  # --- Pinky Rocker (2-way) ---
-  28: "JOY_BTN28"          # Pinky Rocker - Forward
-  29: "JOY_BTN29"          # Pinky Rocker - Aft
-
-  # ═══════════════════════════════════════════════════════════════
-  # THROTTLE BASE PANEL — Top Row Toggle Switches
-  # Each 2-pos toggle = 2 buttons; 3-pos toggle/rotary = 3 buttons
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Toggle Switch 1 (2-position) ---
-  30: "JOY_BTN30"          # Toggle 1 - Up
-  31: "JOY_BTN31"          # Toggle 1 - Down
-
-  # --- Toggle Switch 2 (2-position) ---
-  32: "JOY_BTN32"          # Toggle 2 - Up
-  33: "JOY_BTN33"          # Toggle 2 - Down
-
-  # --- Toggle Switch 3 (2-position) ---
-  34: "JOY_BTN34"          # Toggle 3 - Up
-  35: "JOY_BTN35"          # Toggle 3 - Down
-
-  # --- Toggle Switch 4 (2-position) ---
-  36: "JOY_BTN36"          # Toggle 4 - Up
-  37: "JOY_BTN37"          # Toggle 4 - Down
-
-  # --- 3-Position Rotary Switch + Push ---
-  38: "JOY_BTN38"          # Rotary Select - Position 1
-  39: "JOY_BTN39"          # Rotary Select - Position 2
-  40: "JOY_BTN40"          # Rotary Select - Position 3
-  41: "JOY_BTN41"          # Rotary Select - Push
-
-  # --- 3-Position Toggle Switch ---
-  42: "JOY_BTN42"          # 3-Pos Toggle - Up
-  43: "JOY_BTN43"          # 3-Pos Toggle - Mid
-  44: "JOY_BTN44"          # 3-Pos Toggle - Down
-
-  # ═══════════════════════════════════════════════════════════════
-  # THROTTLE BASE PANEL — Lower Switches
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Landing Gear (2-position) ---
-  45: "JOY_BTN45"          # Landing Gear - Up
-  46: "JOY_BTN46"          # Landing Gear - Down
-
-  # --- Flaps (3-position) ---
-  47: "JOY_BTN47"          # Flaps - Up (AUTO)
-  48: "JOY_BTN48"          # Flaps - Mid (HALF)
-  49: "JOY_BTN49"          # Flaps - Down (FULL)
-
-  # --- Launch Bar (2-position) ---
-  50: "JOY_BTN50"          # Launch Bar - Extend
-  51: "JOY_BTN51"          # Launch Bar - Retract
-
-  # --- Arresting Hook (2-position) ---
-  52: "JOY_BTN52"          # Arresting Hook - Down
-  53: "JOY_BTN53"          # Arresting Hook - Up
-
-  # --- Parking Brake (2-position) ---
-  54: "JOY_BTN54"          # Parking Brake - On
-  55: "JOY_BTN55"          # Parking Brake - Off
-
-  # --- Anti-Skid (2-position) ---
-  56: "JOY_BTN56"          # Anti-Skid - On
-  57: "JOY_BTN57"          # Anti-Skid - Off
-
-  # --- Additional 2-pos Toggles ---
-  58: "JOY_BTN58"          # Toggle 5 - Up (NWS / Formation)
-  59: "JOY_BTN59"          # Toggle 5 - Down
-  60: "JOY_BTN60"          # Toggle 6 - Up
-  61: "JOY_BTN61"          # Toggle 6 - Down
-  62: "JOY_BTN62"          # Toggle 7 - Up
-  63: "JOY_BTN63"          # Toggle 7 - Down
-
-  # ═══════════════════════════════════════════════════════════════
-  # THROTTLE BASE PANEL — Rotary Encoders
-  # Each encoder: CW, CCW, Push = 3 buttons
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Rotary Encoder 1 ---
-  64: "JOY_BTN64"          # Rotary 1 - CW (Clockwise)
-  65: "JOY_BTN65"          # Rotary 1 - CCW (Counter-Clockwise)
-  66: "JOY_BTN66"          # Rotary 1 - Push
-
-  # --- Rotary Encoder 2 ---
-  67: "JOY_BTN67"          # Rotary 2 - CW
-  68: "JOY_BTN68"          # Rotary 2 - CCW
-  69: "JOY_BTN69"          # Rotary 2 - Push
-
-  # --- Rotary Encoder 3 ---
-  70: "JOY_BTN70"          # Rotary 3 - CW
-  71: "JOY_BTN71"          # Rotary 3 - CCW
-  72: "JOY_BTN72"          # Rotary 3 - Push
-
-  # ═══════════════════════════════════════════════════════════════
-  # THROTTLE BASE PANEL — Additional Controls
-  # ═══════════════════════════════════════════════════════════════
-
-  # --- Additional Toggles / Buttons ---
-  73: "JOY_BTN73"          # Toggle 8 - Up
-  74: "JOY_BTN74"          # Toggle 8 - Down
-  75: "JOY_BTN75"          # Toggle 9 - Up
-  76: "JOY_BTN76"          # Toggle 9 - Down
-
-  # --- Push Buttons ---
-  77: "JOY_BTN77"          # Push Button 1 (base panel)
-  78: "JOY_BTN78"          # Push Button 2 (base panel)
-
-  # --- Throttle Locks ---
-  79: "JOY_BTN79"          # Throttle Lock Left
-  80: "JOY_BTN80"          # Throttle Lock Right
-
-# Linux-specific overrides
-# TODO: Populate with actual Linux button IDs from jstest/evtest.
-# The throttle button numbering on Linux does NOT match Windows.
-# linux_overrides:
-
+  1: "JOY_BTN1"
+  2: "JOY_BTN2"
+  3: "JOY_BTN3"
+  4: "JOY_BTN4"
+  5: "JOY_BTN5"
+  6: "JOY_BTN6"
+  7: "JOY_BTN7"
+  8: "JOY_BTN8"
+  9: "JOY_BTN9"
+  10: "JOY_BTN10"
+  11: "JOY_BTN11"
+  12: "JOY_BTN12"
+  13: "JOY_BTN13"
+  14: "JOY_BTN14"
+  15: "JOY_BTN15"
+  16: "JOY_BTN16"
+  17: "JOY_BTN17"
+  18: "JOY_BTN18"
+  19: "JOY_BTN19"
+  20: "JOY_BTN20"
+  21: "JOY_BTN21"
+  22: "JOY_BTN22"
+  23: "JOY_BTN23"
+  24: "JOY_BTN24"
+  25: "JOY_BTN25"
+  26: "JOY_BTN26"
+  27: "JOY_BTN27"
+  28: "JOY_BTN28"
+  29: "JOY_BTN29"
+  30: "JOY_BTN30"
+  31: "JOY_BTN31"
+  32: "JOY_BTN32"
+  33: "JOY_BTN33"
+  34: "JOY_BTN34"
+  35: "JOY_BTN35"
+  36: "JOY_BTN36"
+  37: "JOY_BTN37"
+  38: "JOY_BTN38"
+  39: "JOY_BTN39"
+  40: "JOY_BTN40"
+  41: "JOY_BTN41"
+  42: "JOY_BTN42"
+  43: "JOY_BTN43"
+  44: "JOY_BTN44"
+  45: "JOY_BTN45"
+  46: "JOY_BTN46"
+  47: "JOY_BTN47"
+  48: "JOY_BTN48"
+  49: "JOY_BTN49"
+  50: "JOY_BTN50"
+  51: "JOY_BTN51"
+  52: "JOY_BTN52"
+  53: "JOY_BTN53"
+  54: "JOY_BTN54"
+  55: "JOY_BTN55"
+  56: "JOY_BTN56"
+  57: "JOY_BTN57"
+  58: "JOY_BTN58"
+  59: "JOY_BTN59"
+  60: "JOY_BTN60"
+  61: "JOY_BTN61"
+  62: "JOY_BTN62"
+  63: "JOY_BTN63"
+  64: "JOY_BTN64"
+  65: "JOY_BTN65"
+  66: "JOY_BTN66"
+  67: "JOY_BTN67"
+  68: "JOY_BTN68"
+  69: "JOY_BTN69"
+  70: "JOY_BTN70"
+  71: "JOY_BTN71"
+  72: "JOY_BTN72"
+  73: "JOY_BTN73"
+  74: "JOY_BTN74"
+  75: "JOY_BTN75"
+  76: "JOY_BTN76"
+  77: "JOY_BTN77"
+  78: "JOY_BTN78"
+  79: "JOY_BTN79"
+  80: "JOY_BTN80"

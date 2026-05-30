@@ -217,7 +217,6 @@ detection:
   saturation_min: 100           # minimum saturation (0-255) to count as coloured
   value_min: 100                # minimum brightness (0-255)
   min_marker_area: 300          # px² — minimum contour area to consider
-  circularity_threshold: 0.6    # 1.0 = perfect circle (lower = more lenient)
   ocr_confidence_threshold: 60  # Tesseract confidence minimum (0-100)
 
 # ─── Rendering Settings ──────────────────────────────────────
@@ -359,28 +358,33 @@ Input Image
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
-│ Step 2: Contour Detection & Filtering                │
+│ Step 2: Blob Detection & Filtering                   │
 │  - Find contours on the colour mask                  │
+│  - Pre-filter noise (minimum area threshold)         │
+│  - Merge nearby contours (handles numbers that       │
+│    split the fill into separate blobs)               │
 │  - Filter by:                                        │
 │    • Minimum area (reject tiny noise/artifacts)      │
-│    • Circularity (ratio of area to perimeter²)       │
 │    • Aspect ratio (width/height ≈ 1.0)              │
-│  - Compute center point of each valid contour        │
-│  - Output: list of marker bounding boxes + centers   │
+│    • Green density (≥50% of bounding box is green)   │
+│  - Compute center point and radius from bounding box │
+│  - Output: list of marker centers + radii            │
 └─────────────────────┬───────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────┐
 │ Step 3: Number Extraction (OCR)                      │
-│  - Crop each detected marker region with padding     │
+│  - Crop each detected marker region                  │
 │  - Preprocess ROI for OCR:                           │
-│    • Convert ROI to greyscale                        │
-│    • Threshold to isolate black text from colour fill │
-│    • Resize to consistent height (e.g., 48px)        │
-│    • Invert if needed for Tesseract                  │
+│    • Strip marker colour (set green pixels to white) │
+│    • Apply circle mask to remove background          │
+│    • Scale up (6x minimum) for OCR accuracy          │
+│    • Threshold to clean binary image                 │
 │  - Run Tesseract with digit-only config:             │
-│    --psm 7 (single line) -c tessedit_char_whitelist= │
+│    --psm 8 (single word) -c tessedit_char_whitelist= │
 │    0123456789                                        │
+│  - If result has too many digits for circle size,    │
+│    retry with tighter mask to remove edge artifacts  │
 │  - Validate: reject non-numeric / low confidence     │
 │  - Output: {number: (center_x, center_y)} mapping    │
 └─────────────────────┬───────────────────────────────┘
@@ -447,7 +451,6 @@ detection:
   saturation_min: 100           # minimum saturation (0-255) to count as coloured
   value_min: 100                # minimum brightness (0-255)
   min_marker_area: 300          # px² - minimum contour area to consider
-  circularity_threshold: 0.6    # 1.0 = perfect circle (lower = more lenient)
   ocr_confidence_threshold: 60  # Tesseract confidence minimum (0-100)
 ```
 
@@ -471,29 +474,21 @@ The user never specifies (x, y) positions. All button positions are determined a
 
 ```yaml
 # mappings/winwing-orion2-f16ex-stick.yaml
-device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-device_name_alt: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name_alt: "WINWING Orion Joystick Base 2 + JGRIP-F16"
 
 # Maps the NUMBER visible in the image circle → DCS button ID
 # The (x, y) position is auto-detected from the image — not specified here
 mappings:
-  1: "JOY_BTN1"            # Trigger - First Detent
-  2: "JOY_BTN6"            # Trigger - Second Detent
-  3: "JOY_BTN2"            # Pickle Button
-  4: "JOY_BTN_POV1_U"     # TMS - Up
-  5: "JOY_BTN_POV1_D"     # TMS - Down
-  # ... etc
-
-# Optional: Linux-specific overrides (same format, different IDs)
-linux_overrides:
   1: "JOY_BTN1"
   2: "JOY_BTN2"
-  # ... on Linux, button numbers typically match the device manual numbering
+  3: "JOY_BTN3"
+  # ... etc
 ```
 
-**Device-to-DCS matching:** When the tool searches for bindings, it scans the **filenames** in `Config/Input/<aircraft>/joystick/` and matches against the `device_name` (and `device_name_alt`) field using **starts-with matching**. DCS device filenames include a GUID suffix (e.g., `Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16 {9E573ED2-...}.diff.lua`), so the tool matches if the filename **starts with** the `device_name` string. If no match is found for a device, the tool logs a warning and skips that device for that aircraft (the other device will still render with its bindings).
+**Device-to-DCS matching:** When the tool searches for bindings, it scans the **filenames** in `Config/Input/<aircraft>/joystick/` and matches against the `device_name` (and `device_name_alt`) field using **starts-with matching**. DCS device filenames include a GUID suffix (e.g., `Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16 {9E573ED2-...}.diff.lua`), so the tool matches if the filename **starts with** the `device_name` string. The `device_name` should use the latest firmware naming convention, with `device_name_alt` as a fallback for older firmware versions. If no match is found for a device, the tool logs a warning and skips that device for that aircraft (the other device will still render with its bindings).
 
-This handles the Linux driver reordering problem. The user maintains one mapping file per device that only defines number-to-ID relationships — the tool handles all spatial/position detection automatically from the image.
+The user maintains one mapping file per device that only defines number-to-ID relationships — the tool handles all spatial/position detection automatically from the image.
 
 ### 5. Image Renderer & Label Layout Engine (Critical Component)
 
@@ -795,12 +790,12 @@ dcs-binding-visualizer/
 ├── src/
 │   └── dcs_bindings/
 │       ├── __init__.py
-│       ├── cli.py              # Click/argparse CLI entry point
+│       ├── cli.py              # Click CLI entry point
 │       ├── config.py           # Config loading & validation
 │       ├── setup_wizard.py     # Interactive first-run setup wizard
 │       ├── aircraft_scanner.py # Scan DCS install for available aircraft/seats
 │       ├── lua_parser.py       # DCS Lua table parser
-│       ├── detector.py         # Circle detection (OpenCV contours, filtering)
+│       ├── detector.py         # Blob detection (HSV colour isolation, contour merging)
 │       ├── ocr.py              # OCR number reading (Tesseract integration)
 │       ├── detection_cache.py  # Cache detected positions by image hash
 │       ├── mapping.py          # Button number mapping logic
@@ -809,7 +804,10 @@ dcs-binding-visualizer/
 │       ├── abbreviations.py    # Text abbreviation rules for long binding names
 │       └── models.py           # Data models (Binding, Device, LabelBox, etc.)
 │
-├── images/                     # User-provided device images (gitignored)
+├── images/                     # Annotated device images for detection
+│   └── .gitkeep
+│
+├── resources/                  # Source device images (unannotated)
 │   └── .gitkeep
 │
 ├── mappings/                   # Button mapping files
@@ -817,25 +815,18 @@ dcs-binding-visualizer/
 │   ├── winwing-orion2-f18-throttle.yaml
 │   └── virpil-rotor-tcs-dual-sf.yaml
 │
-├── fonts/                      # Bundled open-source fonts
-│   └── DejaVuSans.ttf
+├── docs/                       # Documentation
+│   ├── plan.md
+│   └── linux-input-devices.md
 │
 ├── output/                     # Generated images (gitignored)
 │   └── .gitkeep
 │
 ├── .cache/                     # Detected button positions cache (gitignored)
-│   └── .gitkeep               # Auto-populated with YAML files per device image
+│   └── .gitkeep
 │
-└── tests/
-    ├── test_lua_parser.py
-    ├── test_detector.py        # Circle detection unit tests
-    ├── test_ocr.py             # OCR extraction tests
-    ├── test_layout.py          # Label placement algorithm tests
-    ├── test_renderer.py
-    └── test_fixtures/          # Sample images with known circle positions
-        ├── simple_3_buttons.png
-        ├── dense_20_buttons.png
-        └── expected_positions.yaml
+└── tests/                      # Tests (TODO)
+    └── .gitkeep
 ```
 
 ---

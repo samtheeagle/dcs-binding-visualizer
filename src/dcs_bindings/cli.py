@@ -169,11 +169,11 @@ def detect_buttons(state, image, debug):
     _echo(state, f"  Marker colour: {detection_config.marker_colour}")
 
     # Run detection
-    markers = detect_markers(image, detection_config)
-    _echo(state, f"  Found {len(markers)} candidate markers")
+    raw_markers = detect_markers(image, detection_config)
+    _echo(state, f"  Found {len(raw_markers)} candidate markers")
 
     # Run OCR
-    markers = read_marker_numbers(image, markers, detection_config)
+    markers = read_marker_numbers(image, raw_markers, detection_config)
     _echo(state, f"  Successfully read {len(markers)} numbers")
 
     # Show results
@@ -188,7 +188,7 @@ def detect_buttons(state, image, debug):
     # Generate debug image if requested
     if debug:
         debug_path = str(Path(image).with_suffix("")) + "_detected.png"
-        generate_debug_image(image, markers, debug_path)
+        generate_debug_image(image, raw_markers, debug_path)
         _echo(state, f"  ✓ Debug image saved: {debug_path}")
 
     _echo(state, "")

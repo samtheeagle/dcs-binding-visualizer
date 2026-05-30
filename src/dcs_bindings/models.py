@@ -58,7 +58,6 @@ class DeviceMapping:
     device_name_alt: str = ""
     description: str = ""
     mappings: dict[int, str] = field(default_factory=dict)  # image_number -> DCS button ID
-    linux_overrides: dict[int, str] = field(default_factory=dict)
     axes: list[dict[str, str]] = field(default_factory=list)
 
 
