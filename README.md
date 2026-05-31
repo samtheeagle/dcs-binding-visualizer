@@ -1,30 +1,28 @@
 # DCS Binding Visualizer
 
-A Python CLI tool that reads your DCS World joystick bindings and generates printable A4 reference cards showing which button does what — with labels placed directly on photos of your actual devices.
+A Python CLI tool that reads DCS World joystick bindings and generates printable SVG reference cards showing which button does what — with labels placed directly on photos of your actual devices.
 
 ## Features
 
-- **Automatic button detection** — Uses colour-filled circle markers on your device images. OpenCV + OCR finds them automatically; no manual coordinate entry.
+- **Automatic button detection** — Uses green circle markers on device images. OpenCV + OCR finds them automatically.
 - **One-time detection, cached** — Image analysis runs once and is cached. Subsequent renders are instant.
-- **Multi-seat aircraft support** — Automatically detects multi-crew aircraft (e.g., AH-64D Pilot/CPG) and generates a separate image per seat.
-- **Smart label placement** — Anti-collision algorithm with 8-position candidates, force-directed nudging, and leader lines for dense layouts.
-- **A4 landscape output** — Two devices side-by-side (stick + throttle) on one printable page.
-- **Linux button remapping** — Per-device YAML mapping handles Windows vs Linux button ID differences.
-- **Interactive aircraft selection** — Scans your installed DCS modules and prompts you to pick which to render.
-- **Interactive first-run wizard** — Guides you through setup on first use.
-- **Configurable fonts & rendering** — Change font family, size, DPI, colours, and more.
-- **Modifier support** — Bindings with modifiers are annotated with `[M]`.
-- **Dry-run mode** — Preview what would be generated without actually rendering.
+- **Multi-seat aircraft support** — Detects multi-crew aircraft (e.g., AH-64D Pilot/CPG) and generates separate output per seat.
+- **Smart label placement** — Collision-aware algorithm tries 8 positions around each button, samples the raster image to avoid busy areas.
+- **Button grouping** — Hat switches, multi-position switches, and rotary encoders rendered as single grouped labels.
+- **SVG output** — Editable in Inkscape. Labels can be manually repositioned after generation.
+- **Combined A4 landscape** — Two devices side-by-side on one printable page at 300 DPI.
+- **Hardware probing** — Reads connected joystick axes/buttons directly from the OS (Linux and Windows).
+- **Marker image generation** — Creates transparent PNGs with button markers for building annotated device images.
+- **Mapping file generation** — Bootstraps device mapping files from detected markers with offset support.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.9+
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) installed on your system
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
   - **Fedora/Nobara:** `sudo dnf install tesseract`
   - **Ubuntu/Debian:** `sudo apt install tesseract-ocr`
-  - **macOS:** `brew install tesseract`
   - **Windows:** [Installer](https://github.com/UB-Mannheim/tesseract/wiki)
 
 ### Installation
@@ -41,142 +39,212 @@ pip install -e .
 dcs-bindings init
 ```
 
-This launches the setup wizard which will prompt you for:
-1. DCS install and saved games directories
-2. Marker colour used on your device images
-3. Paths to your annotated device images
-4. Button mapping files for each device
+Launches the setup wizard to configure DCS paths, device images, and mapping files.
 
-### Generate Binding Images
+### Generate Binding Cards
 
 ```bash
-dcs-bindings render
+dcs-bindings render --aircraft F-16C_50
 ```
 
-You'll be prompted with a numbered list of your installed aircraft — select which ones to generate images for.
+## CLI Commands
 
-## How It Works
+### `dcs-bindings render`
 
-### 1. Prepare Device Images
-
-Take or find a greyscale photo/diagram of each device (stick, throttle, collective). Add **colour-filled circles with black numbers** at each button/hat position:
-
-- Default marker colour: **bright green** (`#00FF00`)
-- Each button direction gets its own numbered circle (e.g., 4-way hat = 4 circles)
-- Numbers should be clear sans-serif digits
-
-### 2. Create Button Mappings
-
-A YAML file per device maps image numbers to DCS button IDs:
-
-```yaml
-device_name: "WINWING Orion Joystick Base 2 + JGRIP-F16"
-device_name_alt: "WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
-
-mappings:
-  1: "JOY_BTN1"    # Trigger First Detent
-  2: "JOY_BTN6"    # Trigger Second Detent
-  3: "JOY_BTN2"    # Pickle Button
-  # ...
-
-linux_overrides:   # Optional: if Linux driver remaps buttons
-  1: "JOY_BTN3"
-```
-
-Default mappings are included for:
-- WinWing Orion 2 F-16EX Stick
-- WinWing Orion 2 F-18 Throttle
-- Virpil Rotor TCS Plus with Dual-SF Grip
-
-### 3. Run & Print
+Generate SVG binding reference cards for an aircraft.
 
 ```bash
-# Render all selected aircraft
-dcs-bindings render
-
-# Render a specific aircraft
-dcs-bindings render --aircraft "F-16C_50"
-
-# Preview without rendering
-dcs-bindings render --dry-run
+dcs-bindings render [OPTIONS]
 ```
 
-Output: A4 landscape PNG per aircraft (per seat for multi-crew), ready to print.
+| Option | Description |
+|--------|-------------|
+| `--aircraft <name>` | Render specific aircraft (skip interactive prompt) |
+| `--seat <name>` | Render specific seat only (use with `--aircraft`) |
+| `--force-detect` | Re-run image detection, ignoring cache |
+| `--dry-run` | Preview what would be generated without rendering |
 
-## CLI Reference
+**Output:** Per-device SVGs + a combined A4 landscape SVG (when multiple devices configured).
 
-### Commands
+---
 
-| Command | Description |
-|---------|-------------|
-| `dcs-bindings init` | Interactive setup wizard |
-| `dcs-bindings render` | Generate binding images |
-| `dcs-bindings list-aircraft` | Show detected aircraft with seat info |
-| `dcs-bindings detect-buttons` | Run/debug marker detection on an image |
-| `dcs-bindings validate` | Check config and mappings for errors |
+### `dcs-bindings list-aircraft`
 
-### Global Flags
+Show all detected aircraft profiles with seat information.
 
-| Flag | Short | Description |
-|------|-------|-------------|
+```bash
+dcs-bindings list-aircraft
+```
+
+---
+
+### `dcs-bindings detect-buttons`
+
+Run marker detection and OCR on a device image. Results are cached for use by `render`.
+
+```bash
+dcs-bindings detect-buttons --image <path> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--image <path>` | Path to device image (required) |
+| `--debug` | Save annotated debug image showing detected markers |
+
+---
+
+### `dcs-bindings detect-groups`
+
+Scan an image for connecting lines between markers to suggest button groups.
+
+```bash
+dcs-bindings detect-groups --image <path>
+```
+
+| Option | Description |
+|--------|-------------|
+| `--image <path>` | Path to device image (required) |
+
+**Output:** YAML `groups:` section ready to paste into a mapping file.
+
+---
+
+### `dcs-bindings generate-mapping`
+
+Generate a skeleton mapping file from detected markers on a device image.
+
+```bash
+dcs-bindings generate-mapping --image <path> --device-name <name> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--image <path>` | Path to device image (required) |
+| `--device-name <name>` | DCS device name as it appears in diff files (required) |
+| `--output <path>` | Output file path (default: `output/<image>_mapping.yaml`) |
+| `--offset <n>` | Offset: DCS button = image number + offset (default: 0) |
+| `--description <text>` | Device description |
+| `--probe-device` | Probe connected hardware to auto-populate axes |
+
+**Output:** Complete YAML mapping file with sequential button entries (undetected markers commented out), auto-detected groups, and optionally probed axis information.
+
+---
+
+### `dcs-bindings generate-markers`
+
+Generate a transparent PNG containing button marker circles for manual placement onto device images.
+
+```bash
+dcs-bindings generate-markers --mapping <path> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--mapping <path>` | Path to device mapping YAML file (required) |
+| `--output <path>` | Output PNG path (default: `output/<mapping>_markers.png`) |
+| `--radius <n>` | Circle radius in pixels (default: 20) |
+
+**Output:** Transparent PNG with all buttons and groups rendered as green circles with black numbers, connected by lines according to group layout type.
+
+---
+
+### `dcs-bindings validate`
+
+Check configuration and mapping files for errors.
+
+```bash
+dcs-bindings validate
+```
+
+---
+
+### `dcs-bindings init`
+
+Interactive setup wizard for first-time configuration.
+
+```bash
+dcs-bindings init
+```
+
+---
+
+### Global Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
 | `--config <path>` | `-c` | Config file path (default: `config.yaml`) |
 | `--quiet` | `-q` | Suppress output except errors |
 | `--verbose` | `-v` | Detailed debug output |
+| `--version` | | Show version |
 
-### Render Flags
+## Mapping File Format
 
-| Flag | Description |
-|------|-------------|
-| `--aircraft <name>` | Skip interactive prompt; render specific aircraft |
-| `--seat <name>` | Render specific seat only (with `--aircraft`) |
-| `--force-detect` | Re-run image detection ignoring cache |
-| `--output-dir <path>` | Override output directory |
-| `--dry-run` | Preview what would be generated |
+Each device needs a YAML mapping file that translates image marker numbers to DCS button IDs:
 
-## Configuration
+```yaml
+device_name: "Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16"
+device_name_alt: ""
+description: "WinWing Orion 2 F-16EX Stick"
 
-Copy `config.example.yaml` to `config.yaml`, or run `dcs-bindings init`.
+axes:
+  - id: "JOY_AXIS_X"
+    description: "X"
+  - id: "JOY_AXIS_Y"
+    description: "Y"
 
-See the [example config](config.example.yaml) for all available options with descriptions.
+mappings:
+  1: "JOY_BTN1"
+  2: "JOY_BTN2"
+  3: "JOY_BTN3"
+  # ...
 
-### Key Settings
+groups:
+  - buttons: [9, 10, 11, 12, 13]
+    layout: hat
+  - buttons: [4, 5]
+    layout: horizontal
+  - buttons: [86, 87, 88]
+    layout: vertical
+  - buttons: [69, 70, 71, 72]
+    layout: rotary
+```
 
-| Section | Key | Default | Description |
-|---------|-----|---------|-------------|
-| `detection` | `marker_colour` | `green` | Preset or hex colour for markers |
-| `rendering` | `font_family` | `DejaVu Sans` | Font for all labels |
-| `rendering` | `font_size` | `9` | Label font size in pt |
-| `rendering` | `dpi` | `300` | Output resolution |
-| `output` | `output_dir` | `output/` | Where images are saved |
+### Group Layout Types
+
+| Type | Description | Button Order |
+|------|-------------|--------------|
+| `hat` | 4-5 button cross pattern | center, top, right, bottom, left |
+| `horizontal` | 2-3 position switch (left/right) | left to right |
+| `vertical` | 2-3 position switch (up/down) | top to bottom |
+| `rotary` | 3-position rotary + push | pos1, pos2, pos3, push |
+
+## Workflow
+
+1. **Find/create a device image** — greyscale photo or diagram of your stick/throttle
+2. **Generate marker overlay** — `generate-markers` creates circles you can place on the image
+3. **Annotate the image** — In an image editor, place markers at each button location
+4. **Generate mapping** — `generate-mapping` detects markers and creates the YAML file
+5. **Tweak mapping** — Adjust button offsets, fix any OCR misreads, refine groups
+6. **Render** — `render` produces the final labelled SVG cards
 
 ## Project Structure
 
 ```
 dcs-binding-visualizer/
-├── src/dcs_bindings/       # Application source code
+├── src/dcs_bindings/       # Application source
 ├── mappings/               # Button mapping YAML files
-├── images/                 # Your device images (gitignored)
-├── output/                 # Generated images (gitignored)
+├── images/                 # Device images (gitignored)
+├── output/                 # Generated output (gitignored)
 ├── .cache/                 # Detection cache (gitignored)
-├── fonts/                  # Bundled fonts
-├── docs/plan.md            # Detailed project plan
-├── config.example.yaml     # Example configuration
+├── config.yaml             # User configuration
 └── pyproject.toml          # Python project metadata
 ```
 
-## Supported Devices (Bundled Mappings)
-
-- **WinWing Orion 2 EX + F-16EX Stick Grip** — 39 buttons, 4 axes
-- **WinWing Orion 2 + F-18 Throttle Handles** — 56 buttons, 4 axes
-- **Virpil Rotor TCS Plus + Dual-SF Collective Grip** — 19 buttons, 2 axes
-
-Adding new devices: create a YAML mapping file and an annotated image.
-
 ## Cross-Platform
 
-- **Primary target:** Nobara Linux (Fedora-based)
-- **Also works on:** Windows, macOS
-- DCS runs via Wine/Proton on Linux or natively on Windows
+- **Primary target:** Linux (Nobara/Fedora) with DCS via Proton
+- **Also works on:** Windows (native DCS)
+- Hardware probing supports both Linux (`/dev/input/js*`) and Windows (`winmm.dll`)
 
 ## License
 
