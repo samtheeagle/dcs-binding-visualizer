@@ -221,11 +221,12 @@ groups:
 ## Workflow
 
 1. **Find/create a device image** — greyscale photo or diagram of your stick/throttle
-2. **Generate marker overlay** — `generate-markers` creates circles you can place on the image
-3. **Annotate the image** — In an image editor, place markers at each button location
-4. **Generate mapping** — `generate-mapping` detects markers and creates the YAML file
+2. **Add green markers** — Fill each button circle on the image with bright green (`#00FF00`). The detection pipeline uses this colour to locate markers.
+3. **Detect markers** — `detect-buttons` finds the green circles and reads the numbers via OCR
+4. **Generate mapping** — `generate-mapping` creates the YAML file from detected markers
 5. **Tweak mapping** — Adjust button offsets, fix any OCR misreads, refine groups
-6. **Render** — `render` produces the final labelled SVG cards
+6. **Generate marker overlay** (optional) — `generate-markers` creates a transparent PNG with correctly-sized markers you can use to replace hand-drawn ones for better detection
+7. **Render** — `render` produces the final labelled SVG cards
 
 ## Project Structure
 

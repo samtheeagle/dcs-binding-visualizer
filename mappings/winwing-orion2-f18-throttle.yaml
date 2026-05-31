@@ -106,6 +106,8 @@ mappings:
 groups:
   - buttons: [1, 2]
     layout: horizontal
+  - buttons: [65, 66]
+    layout: vertical
   - buttons: [67, 68]
     layout: vertical
   - buttons: [69, 70, 71, 72]
@@ -124,5 +126,13 @@ groups:
     layout: vertical
   - buttons: [93, 94, 95]
     layout: vertical
+  - buttons: [97, 99, 98]
+    layout: horizontal
+  - buttons: [100, 102, 101]
+    layout: horizontal
+  - buttons: [103, 105, 104]
+    layout: horizontal
   - buttons: [106, 107, 108]
+    layout: vertical
+  - buttons: [109, 110, 111]
     layout: vertical
