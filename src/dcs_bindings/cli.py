@@ -127,6 +127,25 @@ def render(state, aircraft, seat, force_detect, output_dir, dry_run):
             )
             _echo(state, f"  ✓ Saved: {svg_path}")
 
+        # Generate combined A4 landscape SVG
+        svg_files = []
+        for position in sorted(device_data.keys()):
+            data = device_data[position]
+            svg_filename = job.aircraft_name
+            if job.seat:
+                svg_filename += f"_{job.seat}"
+            svg_filename += f"_{position}.svg"
+            svg_files.append(os.path.join(config.output.output_dir, svg_filename))
+
+        if len(svg_files) > 1:
+            combined_filename = job.aircraft_name
+            if job.seat:
+                combined_filename += f"_{job.seat}"
+            combined_filename += "_combined.svg"
+            combined_path = os.path.join(config.output.output_dir, combined_filename)
+            _generate_combined_svg(svg_files, combined_path)
+            _echo(state, f"  ✓ Saved: {combined_path}")
+
         rendered += 1
 
     _echo(state, f"\n  Done! {rendered} image{'s' if rendered != 1 else ''} generated.")
@@ -313,6 +332,229 @@ def detect_groups(state, image):
     _echo(state, "")
 
 
+@cli.command("generate-markers")
+@click.option("--mapping", "-m", required=True, help="Path to device mapping YAML file")
+@click.option("--output", "-o", default=None, help="Output PNG file path (default: output dir)")
+@click.option("--radius", type=int, default=20, help="Circle radius in pixels (default: 20)")
+@pass_state
+def generate_markers(state, mapping, output, radius):
+    """Generate a transparent PNG with button marker circles for manual placement."""
+    from .marker_generator import generate_marker_image
+    import os
+
+    if not Path(mapping).exists():
+        click.echo(f"  Error: Mapping file not found: {mapping}", err=True)
+        return
+
+    config = load_config(state.config_path)
+    device_mapping = load_device_mapping(mapping)
+
+    if not output:
+        os.makedirs(config.output.output_dir, exist_ok=True)
+        stem = Path(mapping).stem
+        output = os.path.join(config.output.output_dir, f"{stem}_markers.png")
+    _echo(state, f"\n  Generating markers from: {mapping}")
+    _echo(state, f"  Device: {device_mapping.device_name}")
+    _echo(state, f"  Buttons: {len(device_mapping.mappings)}, Groups: {len(device_mapping.groups)}")
+
+    result = generate_marker_image(device_mapping, output, circle_radius=radius)
+    if result:
+        _echo(state, f"  ✓ Saved: {result}")
+    _echo(state, "")
+
+
+@cli.command("generate-mapping")
+@click.option("--image", required=True, help="Path to device image")
+@click.option("--device-name", required=True, help="DCS device name (e.g. 'Winwing WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16')")
+@click.option("--output", "-o", default=None, help="Output YAML mapping file path (default: output dir)")
+@click.option("--offset", type=int, default=0, help="Offset to apply: DCS button = image number + offset")
+@click.option("--description", default="", help="Device description")
+@click.option("--probe-device", is_flag=True, help="Probe connected hardware to populate axes info")
+@pass_state
+def generate_mapping(state, image, device_name, output, offset, description, probe_device):
+    """Generate a skeleton mapping file from detected markers on a device image."""
+    import cv2
+    import numpy as np
+
+    config = load_config(state.config_path)
+    if not output:
+        import os
+        os.makedirs(config.output.output_dir, exist_ok=True)
+        stem = Path(image).stem
+        output = os.path.join(config.output.output_dir, f"{stem}_mapping.yaml")
+
+    config = load_config(state.config_path)
+    detection_config = config.detection if config else None
+
+    if not Path(image).exists():
+        click.echo(f"  Error: Image not found: {image}", err=True)
+        return
+
+    # Load cached markers or detect
+    markers = get_cached_markers(image)
+    if not markers:
+        _echo(state, f"  No cached positions for {image}. Running detection...")
+        raw_markers = detect_markers(image, detection_config)
+        markers = read_marker_numbers(image, raw_markers, detection_config)
+        save_markers_to_cache(image, markers, detection_config.marker_colour)
+
+    _echo(state, f"  Found {len(markers)} markers in: {image}")
+
+    # Deduplicate marker numbers (take highest confidence)
+    # Filter out implausible numbers (OCR errors producing >3 digit results)
+    best_markers = {}
+    for m in markers:
+        if m.number > 200:
+            continue  # OCR misread
+        if m.number not in best_markers or m.confidence > best_markers[m.number].confidence:
+            best_markers[m.number] = m
+    marker_nums = sorted(best_markers.keys())
+
+    # Generate mappings with offset
+    lines = []
+    lines.append(f'# Auto-generated mapping file for: {device_name}')
+    lines.append(f'# Image: {image}')
+    lines.append(f'# Offset applied: {offset} (DCS button = image number + offset)')
+    lines.append(f'')
+    lines.append(f'device_name: "{device_name}"')
+    lines.append(f'device_name_alt: ""')
+    lines.append(f'description: "{description}"')
+    lines.append(f'')
+
+    # Probe hardware for axes info if requested
+    probed_axes = []
+    if probe_device:
+        from .device_probe import list_devices
+        try:
+            devices = list_devices()
+            # Find device matching the name (substring match)
+            matched = [d for d in devices if device_name.lower() in d.name.lower()
+                       or d.name.lower() in device_name.lower()]
+            if matched:
+                dev = matched[0]
+                probed_axes = dev.axes
+                _echo(state, f"  Probed device: {dev.name} ({dev.num_buttons} buttons, {dev.num_axes} axes)")
+            else:
+                _echo(state, f"  ⚠ No connected device matching '{device_name}' found")
+                _echo(state, f"    Available: {[d.name for d in devices]}")
+        except RuntimeError as e:
+            _echo(state, f"  ⚠ Device probing failed: {e}")
+
+    if probed_axes:
+        lines.append(f'axes:')
+        for ax in probed_axes:
+            lines.append(f'  - id: "{ax["id"]}"')
+            lines.append(f'    description: "{ax["description"]}"')
+    else:
+        lines.append(f'axes: []')
+
+    lines.append(f'')
+    lines.append(f'mappings:')
+    max_num = max(marker_nums) if marker_nums else 0
+    detected_set = set(marker_nums)
+    for num in range(1, max_num + 1):
+        dcs_btn = num + offset
+        if num in detected_set:
+            lines.append(f'  {num}: "JOY_BTN{dcs_btn}"')
+        else:
+            lines.append(f'  # {num}: "JOY_BTN{dcs_btn}"  # NOT DETECTED')
+
+    # Detect groups (same logic as detect-groups command)
+    pos_map = {m.number: m for m in best_markers.values()}
+    img = cv2.imread(str(image))
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    def check_line(p1, p2):
+        x1, y1 = p1.center_x, p1.center_y
+        x2, y2 = p2.center_x, p2.center_y
+        dist = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+        if dist < 30 or dist > 135:
+            return False
+        num_samples = int(dist) // 3
+        skip = 20 / dist
+        dark = 0
+        total = 0
+        for t in np.linspace(skip, 1 - skip, num_samples):
+            x = int(x1 + t * (x2 - x1))
+            y = int(y1 + t * (y2 - y1))
+            if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
+                if gray[y, x] < 180:
+                    dark += 1
+                total += 1
+        return total > 0 and (dark / total) > 0.5
+
+    connected = []
+    marker_list = list(pos_map.values())
+    for i, p1 in enumerate(marker_list):
+        for p2 in marker_list[i + 1:]:
+            if check_line(p1, p2):
+                connected.append((p1.number, p2.number))
+
+    # Union-find with max group size 5
+    parent = {}
+    size = {}
+
+    def find(x):
+        if x not in parent:
+            parent[x] = x
+            size[x] = 1
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb and size[ra] + size[rb] <= 5:
+            if size[ra] < size[rb]:
+                ra, rb = rb, ra
+            parent[rb] = ra
+            size[ra] += size[rb]
+
+    for a, b in connected:
+        union(a, b)
+
+    groups = {}
+    for a, b in connected:
+        for x in (a, b):
+            r = find(x)
+            groups.setdefault(r, set()).add(x)
+
+    # Determine layout type and add groups section
+    group_results = []
+    for root, members in sorted(groups.items(), key=lambda x: min(x[1])):
+        if len(members) < 2:
+            continue
+        buttons = sorted(members)
+        xs = [pos_map[n].center_x for n in buttons]
+        ys = [pos_map[n].center_y for n in buttons]
+        x_spread = max(xs) - min(xs)
+        y_spread = max(ys) - min(ys)
+
+        if len(buttons) >= 4 and x_spread > 50 and y_spread > 50:
+            layout = "hat"
+        elif x_spread > y_spread:
+            layout = "horizontal"
+        else:
+            layout = "vertical"
+        group_results.append({"buttons": buttons, "layout": layout})
+
+    if group_results:
+        lines.append(f'')
+        lines.append(f'groups:')
+        for g in group_results:
+            lines.append(f'  - buttons: {g["buttons"]}')
+            lines.append(f'    layout: {g["layout"]}')
+
+    # Write output
+    with open(output, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    _echo(state, f"  ✓ Generated mapping file: {output}")
+    _echo(state, f"    {len(marker_nums)} buttons mapped, {len(group_results)} groups detected")
+    _echo(state, "")
+
+
 @cli.command()
 @pass_state
 def validate(state):
@@ -334,6 +576,61 @@ def validate(state):
 
 
 # ─── Helper Functions ────────────────────────────────────────────────────────
+
+
+def _generate_combined_svg(svg_files: list[str], output_path: str):
+    """Combine multiple SVG files side by side into an A4 landscape SVG."""
+    import re
+
+    # A4 landscape at 300 DPI
+    page_w = 3508
+    page_h = 2480
+
+    # Parse dimensions from each SVG
+    panels = []
+    for svg_file in svg_files:
+        with open(svg_file, "r") as f:
+            content = f.read()
+        # Extract width and height from the SVG tag
+        w_match = re.search(r'width="(\d+)"', content)
+        h_match = re.search(r'height="(\d+)"', content)
+        if w_match and h_match:
+            w = int(w_match.group(1))
+            h = int(h_match.group(1))
+            # Extract everything between <svg ...> and </svg>
+            body_start = content.index(">") + 1
+            body_end = content.rindex("</svg>")
+            body = content[body_start:body_end]
+            panels.append({"w": w, "h": h, "body": body})
+
+    if not panels:
+        return
+
+    # Calculate scaling to fit side by side
+    n = len(panels)
+    panel_w = page_w / n
+    lines = []
+    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
+                 f'width="297mm" height="210mm" '
+                 f'viewBox="0 0 {page_w} {page_h}">')
+
+    x_offset = 0
+    for panel in panels:
+        scale_x = panel_w / panel["w"]
+        scale_y = page_h / panel["h"]
+        scale = min(scale_x, scale_y)
+        scaled_h = panel["h"] * scale
+        y_offset = (page_h - scaled_h) / 2
+
+        lines.append(f'  <g transform="translate({x_offset},{y_offset}) scale({scale})">')
+        lines.append(panel["body"])
+        lines.append(f'  </g>')
+        x_offset += panel_w
+
+    lines.append('</svg>')
+
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))
 
 
 def _ensure_config(state: State) -> Optional[AppConfig]:

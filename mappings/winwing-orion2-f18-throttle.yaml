@@ -25,6 +25,33 @@ mappings:
   # Throttle handle buttons (identity mapping)
   1: "JOY_BTN1"
   2: "JOY_BTN2"
+  3: "JOY_BTN3"
+  4: "JOY_BTN4"
+  5: "JOY_BTN5"
+  6: "JOY_BTN6"
+  7: "JOY_BTN7"
+  8: "JOY_BTN8"
+  9: "JOY_BTN9"
+  10: "JOY_BTN10"
+  11: "JOY_BTN11"
+  12: "JOY_BTN12"
+  13: "JOY_BTN13"
+  14: "JOY_BTN14"
+  15: "JOY_BTN15"
+  16: "JOY_BTN16"
+  17: "JOY_BTN17"
+  18: "JOY_BTN18"
+  19: "JOY_BTN19"
+  20: "JOY_BTN20"
+  21: "JOY_BTN21"
+  22: "JOY_BTN22"
+  23: "JOY_BTN23"
+  24: "JOY_BTN24"
+  25: "JOY_BTN25"
+  26: "JOY_BTN26"
+  27: "JOY_BTN27"
+  28: "JOY_BTN28"
+  29: "JOY_BTN29"
   30: "JOY_BTN30"
   31: "JOY_BTN31"
   # Base buttons: image number - 32 = DCS button number
@@ -82,7 +109,7 @@ groups:
   - buttons: [67, 68]
     layout: vertical
   - buttons: [69, 70, 71, 72]
-    layout: hat
+    layout: rotary
   - buttons: [73, 74]
     layout: vertical
   - buttons: [75, 76]

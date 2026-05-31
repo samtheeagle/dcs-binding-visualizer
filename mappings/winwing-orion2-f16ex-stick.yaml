@@ -62,16 +62,17 @@ mappings:
   42: "JOY_BTN42"
   # Trim hat (reported as POV axis on this device)
   43: "JOY_BTN_POV1_U"
-  44: "JOY_BTN_POV1_D"
-  45: "JOY_BTN_POV1_L"
-  46: "JOY_BTN_POV1_R"
+  44: "JOY_BTN_POV1_R"
+  45: "JOY_BTN_POV1_D"
+  46: "JOY_BTN_POV1_L"
 
 groups:
   - buttons: [4, 5]
     layout: horizontal
   - buttons: [7, 8]
     layout: horizontal
-  - buttons: [9, 10, 11, 12, 13]
+#  - buttons: [9, 10, 11, 12, 13] # Windows default order
+  - buttons: [9, 13, 10, 11, 12] # Linux seems to report a different order
     layout: hat
   - buttons: [14, 15, 16, 17, 18]
     layout: hat
