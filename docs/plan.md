@@ -4,7 +4,7 @@
 
 A CLI tool that generates visual reference cards (SVG) for DCS World joystick bindings. It takes annotated device images (with numbered green circles marking button positions), detects those markers via computer vision + OCR, reads DCS Lua binding files, and renders labelled SVG diagrams showing what each button does for a given aircraft.
 
-The primary output is per-device SVGs (editable in Inkscape) with a combined A4 landscape SVG when multiple devices are configured.
+The primary output is per-device A5 portrait SVGs (editable in Inkscape), with an optional combined A4 landscape SVG (via `--combined` flag) when multiple devices are configured.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ Flow:
 2. Prompt user to select aircraft (or use `--aircraft`)
 3. For each configured device: load mapping, detect/cache marker positions, resolve button positions
 4. For each selected aircraft+seat: parse DCS Lua bindings, render per-device SVGs via `render_binding_svg()`
-5. If multiple devices, generate a combined A4 landscape SVG
+5. If `--combined` flag and multiple devices, generate a combined A4 landscape SVG
 
 ### `list-aircraft`
 Lists detected aircraft profiles with seat information from the DCS saved games directory.
@@ -144,7 +144,7 @@ groups:
 Two rendering paths:
 
 #### `render_binding_image()` (PNG — legacy, still present)
-Renders a full A4 canvas with left/right device images side by side using Pillow. Uses `layout.py` for label placement. Draws labels with semi-transparent backgrounds and leader lines.
+Renders a per-device A5 portrait SVG (148.5mm×210mm, viewBox 1754×2480) with the device image scaled and centered on the page. Labels are positioned using collision-aware placement.
 
 #### `render_binding_svg()` (SVG — primary path used by `render` command)
 1. Embeds device image as base64 in SVG
@@ -164,7 +164,7 @@ Detects cross patterns (4 buttons in up/down/left/right arrangement) and horizon
 Uses group definitions from the mapping YAML. Supports hat (cross), vertical, and horizontal layouts. Produces composite labels with directional indicators.
 
 #### Combined SVG (`_generate_combined_svg()` in cli.py)
-Parses individual SVG files, extracts their bodies, scales and arranges side-by-side in an A4 landscape viewBox (3508×2480 at 300 DPI, 297mm×210mm).
+Places individual A5 portrait SVG bodies side by side in an A4 landscape viewBox (3508×2480 at 300 DPI, 297mm×210mm). No rescaling — each A5 panel (1754×2480) occupies half the A4 width, tops aligned.
 
 ### layout.py (used by PNG path only)
 8-candidate position algorithm with:

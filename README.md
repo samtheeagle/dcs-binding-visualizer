@@ -9,8 +9,8 @@ A Python CLI tool that reads DCS World joystick bindings and generates printable
 - **Multi-seat aircraft support** — Detects multi-crew aircraft (e.g., AH-64D Pilot/CPG) and generates separate output per seat.
 - **Smart label placement** — Collision-aware algorithm tries 8 positions around each button, samples the raster image to avoid busy areas.
 - **Button grouping** — Hat switches, multi-position switches, and rotary encoders rendered as single grouped labels.
-- **SVG output** — Editable in Inkscape. Labels can be manually repositioned after generation.
-- **Combined A4 landscape** — Two devices side-by-side on one printable page at 300 DPI.
+- **SVG output** — Editable in Inkscape. Labels can be manually repositioned after generation. Each device rendered as A5 portrait.
+- **Combined A4 landscape** — Optional two devices side-by-side on one printable page.
 - **Hardware probing** — Reads connected joystick axes/buttons directly from the OS (Linux and Windows).
 - **Marker image generation** — Creates transparent PNGs with button markers for building annotated device images.
 - **Mapping file generation** — Bootstraps device mapping files from detected markers with offset support.
@@ -63,8 +63,9 @@ dcs-bindings render [OPTIONS]
 | `--seat <name>` | Render specific seat only (use with `--aircraft`) |
 | `--force-detect` | Re-run image detection, ignoring cache |
 | `--dry-run` | Preview what would be generated without rendering |
+| `--combined` | Also generate a combined A4 landscape page (two A5 pages side by side) |
 
-**Output:** Per-device SVGs + a combined A4 landscape SVG (when multiple devices configured).
+**Output:** Per-device A5 portrait SVGs. With `--combined`, also produces an A4 landscape SVG with both devices side by side.
 
 ---
 
