@@ -313,7 +313,14 @@ def render_binding_svg(
     except Exception:
         return output_path
 
-    # SVG canvas matches image size
+    # A5 portrait page at 300 DPI (148.5mm × 210mm)
+    page_w = 1754
+    page_h = 2480
+
+    # Scale image to fit A5 page
+    scale_x = page_w / img_w
+    scale_y = page_h / img_h
+    scale = min(scale_x, scale_y)
     svg_w = img_w
     svg_h = img_h
 
@@ -352,7 +359,13 @@ def render_binding_svg(
 
     # Build SVG
     lines = []
-    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w}" height="{svg_h}">')
+    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="148.5mm" height="210mm" viewBox="0 0 {page_w} {page_h}">')
+    # Center the content on the page
+    scaled_w = img_w * scale
+    scaled_h = img_h * scale
+    x_offset = (page_w - scaled_w) / 2
+    y_offset = (page_h - scaled_h) / 2
+    lines.append(f'  <g transform="translate({x_offset:.1f},{y_offset:.1f}) scale({scale:.4f})">')
     lines.append(f'  <image href="data:{mime};base64,{img_b64}" width="{svg_w}" height="{svg_h}"/>')
 
     font_size = max(14, round(svg_w / 80))
@@ -597,6 +610,7 @@ def render_binding_svg(
                 lines.append(f'      <tspan x="{lx}" y="{ly + idx * line_h}">{escaped}</tspan>')
             lines.append(f'    </text>')
     lines.append('  </g>')
+    lines.append('  </g>')  # close transform group
 
     lines.append('</svg>')
 

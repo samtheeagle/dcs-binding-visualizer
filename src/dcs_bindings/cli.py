@@ -59,8 +59,9 @@ def init(state):
 @click.option("--force-detect", is_flag=True, help="Re-run image detection ignoring cache")
 @click.option("--output-dir", help="Override output directory")
 @click.option("--dry-run", is_flag=True, help="Preview what would be generated")
+@click.option("--combined", is_flag=True, help="Also generate combined A4 landscape page")
 @pass_state
-def render(state, aircraft, seat, force_detect, output_dir, dry_run):
+def render(state, aircraft, seat, force_detect, output_dir, dry_run, combined):
     """Generate binding reference images."""
     config = _ensure_config(state)
     if not config:
@@ -126,24 +127,25 @@ def render(state, aircraft, seat, force_detect, output_dir, dry_run):
             )
             _echo(state, f"  ✓ Saved: {svg_path}")
 
-        # Generate combined A4 landscape SVG
-        svg_files = []
-        for position in sorted(device_data.keys()):
-            data = device_data[position]
-            svg_filename = job.aircraft_name
-            if job.seat:
-                svg_filename += f"_{job.seat}"
-            svg_filename += f"_{position}.svg"
-            svg_files.append(os.path.join(config.output.output_dir, svg_filename))
+        # Generate combined A4 landscape SVG (optional)
+        if combined:
+            svg_files = []
+            for position in sorted(device_data.keys()):
+                data = device_data[position]
+                svg_filename = job.aircraft_name
+                if job.seat:
+                    svg_filename += f"_{job.seat}"
+                svg_filename += f"_{position}.svg"
+                svg_files.append(os.path.join(config.output.output_dir, svg_filename))
 
-        if len(svg_files) > 1:
-            combined_filename = job.aircraft_name
-            if job.seat:
-                combined_filename += f"_{job.seat}"
-            combined_filename += "_combined.svg"
-            combined_path = os.path.join(config.output.output_dir, combined_filename)
-            _generate_combined_svg(svg_files, combined_path)
-            _echo(state, f"  ✓ Saved: {combined_path}")
+            if len(svg_files) > 1:
+                combined_filename = job.aircraft_name
+                if job.seat:
+                    combined_filename += f"_{job.seat}"
+                combined_filename += "_combined.svg"
+                combined_path = os.path.join(config.output.output_dir, combined_filename)
+                _generate_combined_svg(svg_files, combined_path)
+                _echo(state, f"  ✓ Saved: {combined_path}")
 
         rendered += 1
 
@@ -416,52 +418,39 @@ def validate(state):
 
 def _generate_combined_svg(svg_files: list[str], output_path: str):
     """Combine multiple SVG files side by side into an A4 landscape SVG."""
-    import re
 
-    # A4 landscape at 300 DPI
-    page_w = 3508
-    page_h = 2480
+    # A5 portrait at 300 DPI = 1754 × 2480
+    # Two A5 side by side = A4 landscape = 3508 × 2480
+    a5_w = 1754
+    a5_h = 2480
+    page_w = a5_w * 2
+    page_h = a5_h
 
-    # Parse dimensions from each SVG
+    # Parse each SVG body
     panels = []
     for svg_file in svg_files:
         with open(svg_file, "r") as f:
             content = f.read()
-        # Extract width and height from the SVG tag
-        w_match = re.search(r'width="(\d+)"', content)
-        h_match = re.search(r'height="(\d+)"', content)
-        if w_match and h_match:
-            w = int(w_match.group(1))
-            h = int(h_match.group(1))
-            # Extract everything between <svg ...> and </svg>
-            body_start = content.index(">") + 1
-            body_end = content.rindex("</svg>")
-            body = content[body_start:body_end]
-            panels.append({"w": w, "h": h, "body": body})
+        body_start = content.index(">") + 1
+        body_end = content.rindex("</svg>")
+        body = content[body_start:body_end]
+        panels.append(body)
 
     if not panels:
         return
 
-    # Calculate scaling to fit side by side
-    n = len(panels)
-    panel_w = page_w / n
     lines = []
     lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
                  f'width="297mm" height="210mm" '
                  f'viewBox="0 0 {page_w} {page_h}">')
 
-    x_offset = 0
-    for panel in panels:
-        scale_x = panel_w / panel["w"]
-        scale_y = page_h / panel["h"]
-        scale = min(scale_x, scale_y)
-        scaled_h = panel["h"] * scale
-        y_offset = (page_h - scaled_h) / 2
-
-        lines.append(f'  <g transform="translate({x_offset},{y_offset}) scale({scale})">')
-        lines.append(panel["body"])
+    # Place panels side by side, tops aligned
+    for i, body in enumerate(panels):
+        x_offset = i * a5_w
+        lines.append(f'  <g transform="translate({x_offset},0)">')
+        # Each panel already has its own viewBox-relative content at A5 scale
+        lines.append(body)
         lines.append(f'  </g>')
-        x_offset += panel_w
 
     lines.append('</svg>')
 
