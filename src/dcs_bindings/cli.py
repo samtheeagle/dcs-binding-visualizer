@@ -16,7 +16,6 @@ from .lua_parser import parse_bindings_for_aircraft
 from .mapping import load_device_mapping, resolve_button_positions
 from .models import AircraftProfile, RenderJob
 from .ocr import read_marker_numbers
-from .renderer import render_binding_image
 from .setup_wizard import run_wizard
 
 
@@ -223,11 +222,7 @@ def detect_buttons(state, image, debug):
 @pass_state
 def detect_groups(state, image):
     """Scan image for connected button markers and suggest groups for the mapping file."""
-    import cv2
-    import numpy as np
-
-    config = load_config(state.config_path)
-    detection_config = config.detection if config else None
+    from .group_detection import detect_groups as _detect_groups
 
     if not Path(image).exists():
         click.echo(f"  Error: Image not found: {image}", err=True)
@@ -241,87 +236,7 @@ def detect_groups(state, image):
 
     _echo(state, f"\n  Scanning for connected markers in: {image}")
 
-    img = cv2.imread(str(image))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    pos_map = {m.number: m for m in markers}
-
-    # Detect lines connecting marker pairs
-    def check_line(p1, p2):
-        x1, y1 = p1.center_x, p1.center_y
-        x2, y2 = p2.center_x, p2.center_y
-        dist = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-        if dist < 30 or dist > 135:
-            return False
-        num_samples = int(dist) // 3
-        skip = 20 / dist
-        dark = 0
-        total = 0
-        for t in np.linspace(skip, 1 - skip, num_samples):
-            x = int(x1 + t * (x2 - x1))
-            y = int(y1 + t * (y2 - y1))
-            if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
-                if gray[y, x] < 180:
-                    dark += 1
-                total += 1
-        return total > 0 and (dark / total) > 0.5
-
-    connected = []
-    marker_list = list(pos_map.values())
-    for i, p1 in enumerate(marker_list):
-        for p2 in marker_list[i + 1:]:
-            if check_line(p1, p2):
-                connected.append((p1.number, p2.number))
-
-    # Union-find with max group size 5
-    parent = {}
-    size = {}
-
-    def find(x):
-        if x not in parent:
-            parent[x] = x
-            size[x] = 1
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb and size[ra] + size[rb] <= 5:
-            if size[ra] < size[rb]:
-                ra, rb = rb, ra
-            parent[rb] = ra
-            size[ra] += size[rb]
-
-    for a, b in connected:
-        union(a, b)
-
-    groups = {}
-    for a, b in connected:
-        for x in (a, b):
-            r = find(x)
-            groups.setdefault(r, set()).add(x)
-
-    # Determine layout type for each group
-    results = []
-    for root, members in sorted(groups.items(), key=lambda x: min(x[1])):
-        if len(members) < 2:
-            continue
-        buttons = sorted(members)
-        xs = [pos_map[n].center_x for n in buttons]
-        ys = [pos_map[n].center_y for n in buttons]
-        x_spread = max(xs) - min(xs)
-        y_spread = max(ys) - min(ys)
-
-        if len(buttons) >= 4 and x_spread > 50 and y_spread > 50:
-            layout = "hat"
-        elif x_spread > y_spread:
-            layout = "horizontal"
-        else:
-            layout = "vertical"
-
-        results.append({"buttons": buttons, "layout": layout})
+    results = _detect_groups(image, markers)
 
     # Output as YAML
     _echo(state, f"  Found {len(results)} groups:\n")
@@ -373,8 +288,7 @@ def generate_markers(state, mapping, output, radius):
 @pass_state
 def generate_mapping(state, image, device_name, output, offset, description, probe_device):
     """Generate a skeleton mapping file from detected markers on a device image."""
-    import cv2
-    import numpy as np
+    from .group_detection import detect_groups as _detect_groups
 
     config = load_config(state.config_path)
     if not output:
@@ -383,7 +297,6 @@ def generate_mapping(state, image, device_name, output, offset, description, pro
         stem = Path(image).stem
         output = os.path.join(config.output.output_dir, f"{stem}_mapping.yaml")
 
-    config = load_config(state.config_path)
     detection_config = config.detection if config else None
 
     if not Path(image).exists():
@@ -459,85 +372,8 @@ def generate_mapping(state, image, device_name, output, offset, description, pro
         else:
             lines.append(f'  # {num}: "JOY_BTN{dcs_btn}"  # NOT DETECTED')
 
-    # Detect groups (same logic as detect-groups command)
-    pos_map = {m.number: m for m in best_markers.values()}
-    img = cv2.imread(str(image))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    def check_line(p1, p2):
-        x1, y1 = p1.center_x, p1.center_y
-        x2, y2 = p2.center_x, p2.center_y
-        dist = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-        if dist < 30 or dist > 135:
-            return False
-        num_samples = int(dist) // 3
-        skip = 20 / dist
-        dark = 0
-        total = 0
-        for t in np.linspace(skip, 1 - skip, num_samples):
-            x = int(x1 + t * (x2 - x1))
-            y = int(y1 + t * (y2 - y1))
-            if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
-                if gray[y, x] < 180:
-                    dark += 1
-                total += 1
-        return total > 0 and (dark / total) > 0.5
-
-    connected = []
-    marker_list = list(pos_map.values())
-    for i, p1 in enumerate(marker_list):
-        for p2 in marker_list[i + 1:]:
-            if check_line(p1, p2):
-                connected.append((p1.number, p2.number))
-
-    # Union-find with max group size 5
-    parent = {}
-    size = {}
-
-    def find(x):
-        if x not in parent:
-            parent[x] = x
-            size[x] = 1
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb and size[ra] + size[rb] <= 5:
-            if size[ra] < size[rb]:
-                ra, rb = rb, ra
-            parent[rb] = ra
-            size[ra] += size[rb]
-
-    for a, b in connected:
-        union(a, b)
-
-    groups = {}
-    for a, b in connected:
-        for x in (a, b):
-            r = find(x)
-            groups.setdefault(r, set()).add(x)
-
-    # Determine layout type and add groups section
-    group_results = []
-    for root, members in sorted(groups.items(), key=lambda x: min(x[1])):
-        if len(members) < 2:
-            continue
-        buttons = sorted(members)
-        xs = [pos_map[n].center_x for n in buttons]
-        ys = [pos_map[n].center_y for n in buttons]
-        x_spread = max(xs) - min(xs)
-        y_spread = max(ys) - min(ys)
-
-        if len(buttons) >= 4 and x_spread > 50 and y_spread > 50:
-            layout = "hat"
-        elif x_spread > y_spread:
-            layout = "horizontal"
-        else:
-            layout = "vertical"
-        group_results.append({"buttons": buttons, "layout": layout})
+    # Detect groups using shared logic
+    group_results = _detect_groups(image, list(best_markers.values()))
 
     if group_results:
         lines.append(f'')

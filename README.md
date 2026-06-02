@@ -228,6 +228,32 @@ groups:
 6. **Generate marker overlay** (optional) — `generate-markers` creates a transparent PNG with correctly-sized markers you can use to replace hand-drawn ones for better detection
 7. **Render** — `render` produces the final labelled SVG cards
 
+## Tips for Reliable Marker Detection
+
+The detection pipeline uses colour isolation (HSV green mask) followed by OCR to read the numbers. For best results:
+
+**Marker size:**
+- Aim for **≥15px radius** in the final image. Below 13px, OCR accuracy drops significantly.
+- The `generate-markers` command produces markers at 20px radius by default — use `--radius` to adjust.
+- If your image is large (e.g., 1900px wide), markers at 15px radius are only 1.5% of the width and may struggle. Scale markers proportionally to the image.
+
+**Marker appearance:**
+- Use **bright green fill** (`#00CC00` or `#00FF00`) with a **black outline** and **black numbers**.
+- Use a **bold, sans-serif font** for numbers. Thin fonts (1-2px stroke width) cause OCR failures, particularly on digits like "1" and "4".
+- Ensure numbers **don't touch the circle edge** — leave at least 2-3px padding inside the circle.
+- Avoid anti-aliasing between text and the green fill where possible (or use thick enough strokes that anti-aliased edges don't matter).
+
+**Image preparation:**
+- Use a **greyscale or white background** for the device image. The collision-aware label placement scores non-white pixels as busy areas.
+- Save as **PNG** (lossless). JPEG compression artifacts around green markers can confuse the detection.
+- Keep the image at a reasonable resolution — 1000-2000px wide works well.
+
+**Troubleshooting:**
+- Run `detect-buttons --debug` to generate an annotated image showing what was detected.
+- Check for **duplicate numbers** (OCR misread) or **missing numbers** in the output.
+- If a specific marker fails, it's usually because the number stroke is too thin at that radius. The `generate-markers` command produces markers with proven OCR-friendly characteristics.
+- The tool filters out any detected number > 200 as an OCR misread.
+
 ## Project Structure
 
 ```

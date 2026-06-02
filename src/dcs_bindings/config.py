@@ -37,7 +37,6 @@ DEFAULT_RENDERING = {
 
 # Default output settings
 DEFAULT_OUTPUT = {
-    "format": "png",
     "page_size": "A4",
     "orientation": "landscape",
     "output_dir": "output/",
@@ -100,7 +99,6 @@ class RenderingConfig:
 class OutputConfig:
     """Output-related configuration."""
 
-    format: str = "png"
     page_size: str = "A4"
     orientation: str = "landscape"
     output_dir: str = "output/"
@@ -201,7 +199,6 @@ def save_config(config: AppConfig, config_path: Optional[str] = None) -> None:
             "device_spacing": config.rendering.device_spacing,
         },
         "output": {
-            "format": config.output.format,
             "page_size": config.output.page_size,
             "orientation": config.output.orientation,
             "output_dir": config.output.output_dir,
@@ -218,6 +215,7 @@ def _parse_config(data: dict[str, Any]) -> AppConfig:
     detection_data = {**DEFAULT_DETECTION, **data.get("detection", {})}
     rendering_data = {**DEFAULT_RENDERING, **data.get("rendering", {})}
     output_data = {**DEFAULT_OUTPUT, **data.get("output", {})}
+    output_data.pop("format", None)  # removed field, ignore if present in old configs
 
     devices = []
     for d in data.get("devices", []):

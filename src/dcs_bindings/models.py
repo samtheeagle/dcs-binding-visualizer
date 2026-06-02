@@ -125,7 +125,6 @@ class RenderJob:
     aircraft_name: str
     seat: Optional[str] = None  # None for single-seat aircraft
     bindings: dict[str, Binding] = field(default_factory=dict)  # button_id -> Binding
-    output_path: str = ""
 
     @property
     def title(self) -> str:

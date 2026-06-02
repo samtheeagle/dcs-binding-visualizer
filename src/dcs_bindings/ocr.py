@@ -107,7 +107,7 @@ def _ocr_with_shrink(
     final = cv2.copyMakeBorder(final, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
 
     # Run Tesseract
-    custom_config = "--psm 8 -c tessedit_char_whitelist=0123456789"
+    custom_config = "--psm 7 -c tessedit_char_whitelist=0123456789"
 
     try:
         data = pytesseract.image_to_data(
@@ -133,6 +133,12 @@ def _ocr_with_shrink(
 
         # Fallback
         text = pytesseract.image_to_string(final, config=custom_config).strip()
+        if text.isdigit():
+            return int(text), 50.0
+
+        # Fallback: try psm 8 (single character) for single-digit numbers
+        fallback_config = "--psm 8 -c tessedit_char_whitelist=0123456789"
+        text = pytesseract.image_to_string(final, config=fallback_config).strip()
         if text.isdigit():
             return int(text), 50.0
 
